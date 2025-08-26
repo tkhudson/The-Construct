@@ -1,0 +1,96 @@
+{
+  "races": [
+    {
+      "name": "Human",
+      "traits": ["Versatile: +1 to all ability scores", "No special traits"]
+    },
+    {
+      "name": "Elf",
+      "traits": ["Darkvision", "Fey Ancestry: Advantage on saving throws against being charmed", "Trance: 4 hours meditation instead of sleep"]
+    },
+    {
+      "name": "Dwarf",
+      "traits": ["Darkvision", "Dwarven Resilience: Advantage on saving throws against poison", "Stonecunning"]
+    },
+    {
+      "name": "Halfling",
+      "traits": ["Lucky: Reroll 1s on d20", "Brave: Advantage on saving throws against being frightened", "Nimble"]
+    },
+    {
+      "name": "Tiefling",
+      "traits": ["Darkvision", "Hellish Resistance: Resistance to fire damage", "Infernal Legacy: Spells like Thaumaturgy"]
+    },
+    {
+      "name": "Dragonborn",
+      "traits": ["Draconic Ancestry: Breath weapon and damage resistance", "Breath Weapon"]
+    }
+  ],
+  "classes": [
+    {
+      "name": "Fighter",
+      "features": ["Fighting Style", "Second Wind", "Action Surge"]
+    },
+    {
+      "name": "Wizard",
+      "features": ["Spellcasting", "Arcane Recovery", "Spellbook"]
+    },
+    {
+      "name": "Rogue",
+      "features": ["Sneak Attack", "Cunning Action", "Expertise"]
+    },
+    {
+      "name": "Cleric",
+      "features": ["Spellcasting", "Divine Domain", "Channel Divinity"]
+    },
+    {
+      "name": "Paladin",
+      "features": ["Divine Sense", "Lay on Hands", "Divine Smite"]
+    },
+    {
+      "name": "Warlock",
+      "features": ["Otherworldly Patron", "Pact Magic", "Eldritch Invocations"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "ability": "Dexterity",
+      "description": "Stay on feet in tricky situations, perform acrobatic stunts"
+    },
+    {
+      "name": "Deception",
+      "ability": "Charisma",
+      "description": "Convincingly hide the truth, verbally or through actions"
+    },
+    {
+      "name": "Persuasion",
+      "ability": "Charisma",
+      "description": "Influence others with tact, social graces, or good nature"
+    },
+    {
+      "name": "Stealth",
+      "ability": "Dexterity",
+      "description": "Conceal yourself from enemies, slink past guards"
+    }
+  ],
+  "spells": [
+    {
+      "name": "Minor Illusion",
+      "level": 0,
+      "school": "Illusion",
+      "description": "Create a sound or image of an object that lasts for 1 minute"
+    },
+    {
+      "name": "Fireball",
+      "level": 3,
+      "school": "Evocation",
+      "description": "A 20-foot radius sphere explodes, dealing 8d6 fire damage"
+    },
+    {
+      "name": "Eldritch Blast",
+      "level": 0,
+      "school": "Evocation",
+      "description": "Ranged spell attack dealing 1d10 force damage"
+    }
+  ]
+}
