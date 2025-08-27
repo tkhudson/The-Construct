@@ -1,10 +1,12 @@
-import React, { useEffect } from "react";
+TheConstruct/src/components/panels/InventoryPanel.js
+import React from "react";
 import {
   View,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
   Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  ScrollView,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -17,28 +19,38 @@ import { PanGestureHandler } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PANEL_WIDTH = Math.min(380, SCREEN_WIDTH * 0.85);
+const PANEL_WIDTH = Math.min(340, SCREEN_WIDTH * 0.8);
 
-const MapPanel = ({
+const groupItemsByType = (items) => {
+  const groups = {};
+  items.forEach((item) => {
+    const type = item.type || "Other";
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(item);
+  });
+  return groups;
+};
+
+const InventoryPanel = ({
   visible,
   onClose,
   onOpen,
-  children,
+  inventory = [],
   theme,
   panelPosition = "right", // "right" or "left"
   anyPanelOpen = false,
+  onUseItem,
+  onDropItem,
 }) => {
-  // Shared value for panel translation
+  // Panel animation
   const closedX = panelPosition === "right" ? PANEL_WIDTH : -PANEL_WIDTH;
   const openX = 0;
   const translateX = useSharedValue(closedX);
 
-  // Animate panel in/out based on visible prop
-  useEffect(() => {
+  React.useEffect(() => {
     translateX.value = withTiming(visible ? openX : closedX, { duration: 350 });
   }, [visible]);
 
-  // Animated style for panel
   const animatedPanelStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -56,10 +68,9 @@ const MapPanel = ({
     },
     onActive: (event, ctx) => {
       let nextX = ctx.startX + event.translationX;
-      // Clamp so panel doesn't go too far open
       if (panelPosition === "right") {
         nextX = Math.min(nextX, openX);
-        nextX = Math.max(nextX, closedX - 40); // allow a little overshoot
+        nextX = Math.max(nextX, closedX - 40);
       } else {
         nextX = Math.max(nextX, openX);
         nextX = Math.min(nextX, closedX + 40);
@@ -72,20 +83,21 @@ const MapPanel = ({
         (panelPosition === "right" && event.translationX < -threshold) ||
         (panelPosition === "left" && event.translationX > threshold)
       ) {
-        // Swiped far enough to close
         translateX.value = withTiming(
           closedX,
           { duration: 250 },
           (finished) => {
             if (finished) runOnJS(onClose)();
-          },
+          }
         );
       } else {
-        // Snap back open
         translateX.value = withTiming(openX, { duration: 250 });
       }
     },
   });
+
+  // Group inventory by type
+  const grouped = groupItemsByType(inventory);
 
   return (
     <>
@@ -123,10 +135,86 @@ const MapPanel = ({
               color={theme?.accent || "#7f9cf5"}
             />
           </TouchableOpacity>
-          <View style={styles.panelContent}>{children}</View>
+          <View style={styles.panelContent}>
+            <Text
+              style={{
+                color: theme?.accent || "#7f9cf5",
+                fontWeight: "bold",
+                fontSize: 20,
+                marginBottom: 10,
+                textAlign: "center",
+                letterSpacing: 1,
+              }}
+            >
+              Inventory
+            </Text>
+            <ScrollView style={styles.inventoryScroll} contentContainerStyle={{ paddingBottom: 12 }}>
+              {inventory.length === 0 && (
+                <Text style={{ color: "#aaa", textAlign: "center", marginTop: 8 }}>
+                  Your inventory is empty.
+                </Text>
+              )}
+              {Object.keys(grouped).map((type) => (
+                <View key={type} style={styles.groupSection}>
+                  <Text
+                    style={{
+                      color: theme?.accent || "#7f9cf5",
+                      fontWeight: "bold",
+                      fontSize: 15,
+                      marginBottom: 4,
+                      marginTop: 10,
+                    }}
+                  >
+                    {type}
+                  </Text>
+                  {grouped[type].map((item) => (
+                    <View key={item.id} style={styles.itemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme?.text || "#fff", fontWeight: "bold" }}>
+                          {item.name}
+                          {item.quantity > 1 ? ` x${item.quantity}` : ""}
+                        </Text>
+                        {item.description && (
+                          <Text style={{ color: "#aaa", fontSize: 13 }}>
+                            {item.description}
+                          </Text>
+                        )}
+                      </View>
+                      {onUseItem && (
+                        <TouchableOpacity
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: theme?.button || "#7ed6a7" },
+                          ]}
+                          onPress={() => onUseItem(item)}
+                        >
+                          <Text style={{ color: theme?.buttonText || "#232946", fontSize: 13 }}>
+                            Use
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {onDropItem && (
+                        <TouchableOpacity
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: "#b23b3b" },
+                          ]}
+                          onPress={() => onDropItem(item)}
+                        >
+                          <Text style={{ color: "#fff", fontSize: 13 }}>
+                            Drop
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Map Tab Button */}
+      {/* Inventory Tab Button */}
       {!visible && !anyPanelOpen && (
         <TouchableOpacity
           style={[
@@ -139,8 +227,8 @@ const MapPanel = ({
           ]}
           onPress={onOpen}
         >
-          <Ionicons name="map" size={24} color="#fff" />
-          <Text style={styles.tabButtonText}>Map</Text>
+          <Ionicons name="bag" size={24} color="#fff" />
+          <Text style={styles.tabButtonText}>Inventory</Text>
         </TouchableOpacity>
       )}
     </>
@@ -184,9 +272,38 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "stretch",
   },
+  inventoryScroll: {
+    flex: 1,
+    marginTop: 2,
+    maxHeight: 340,
+  },
+  groupSection: {
+    marginBottom: 8,
+  },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    borderBottomWidth: 1,
+    borderColor: "#393e6e",
+    borderStyle: "dotted",
+  },
+  actionButton: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 44,
+    minHeight: 28,
+    elevation: 1,
+  },
   tabButton: {
     position: "absolute",
-    top: 80,
+    top: 200,
     zIndex: 30,
     flexDirection: "row",
     alignItems: "center",
@@ -210,4 +327,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MapPanel;
+export default InventoryPanel;
