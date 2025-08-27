@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 
 /**
  * MapGrid Component
@@ -38,7 +38,7 @@ const MapGrid = ({
     Array.from({ length: GRID_SIZE }, (_, x) => {
       const token = tokens.find((t) => t.x === x && t.y === y);
       return { x, y, token };
-    })
+    }),
   );
 
   // Handle cell press
@@ -77,16 +77,24 @@ const MapGrid = ({
             >
               {cell.token ? (
                 <View style={styles.tokenContainer}>
-                  <Text style={styles.tokenLabel}>
-                    {cell.token.label ||
-                      (cell.token.type === "player"
-                        ? "P"
-                        : cell.token.type === "npc"
-                        ? "N"
-                        : cell.token.type === "monster"
-                        ? "M"
-                        : "?")}
-                  </Text>
+                  {cell.token.imageUri ? (
+                    <Image
+                      source={{ uri: cell.token.imageUri }}
+                      style={styles.tokenImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.tokenLabel}>
+                      {cell.token.label ||
+                        (cell.token.type === "player"
+                          ? "P"
+                          : cell.token.type === "npc"
+                            ? "N"
+                            : cell.token.type === "monster"
+                              ? "M"
+                              : "?")}
+                    </Text>
+                  )}
                 </View>
               ) : null}
             </TouchableOpacity>
@@ -136,6 +144,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
     elevation: 2,
+    overflow: "hidden",
+  },
+  tokenImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   tokenLabel: {
     color: "#fff",

@@ -23,6 +23,7 @@ The Construct is a cross-platform digital tabletop RPG that brings D&D 5e (and o
 - [Node.js](https://nodejs.org/) (v16+ recommended)
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
 - [Expo CLI](https://docs.expo.dev/get-started/installation/) (for mobile/web development)
+- [expo-image-picker](https://docs.expo.dev/versions/latest/sdk/imagepicker/) (for custom token uploads; now installed via npm)
 
 ### Setup
 
@@ -35,7 +36,26 @@ The Construct is a cross-platform digital tabletop RPG that brings D&D 5e (and o
    yarn install
    ```
 
-2. **Start the app:**
+2. **Install required dependencies:**
+   ```
+   npm install
+   ```
+   or
+   ```
+
+#### Troubleshooting
+
+If you encounter issues with `expo-image-picker` (such as version mismatches), run:
+```
+expo install expo-image-picker
+```
+This ensures compatibility with your Expo SDK version.
+   yarn install
+   ```
+
+   > **Note:** `expo-image-picker` is now included in `package.json` and will be installed automatically.
+
+3. **Start the app:**
    ```
    npm start
    ```
