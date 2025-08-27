@@ -241,6 +241,15 @@ const Settings = ({ navigation }) => {
         tokens are stored securely on your device. We do not access or share
         them. Usage is logged for transparency.
       </Text>
+      <Text style={styles.info}>
+        Technical Note: Your API key is{" "}
+        <Text style={{ fontWeight: "bold" }}>never</Text> stored in the app's
+        codebase or made public. It is only saved locally on your device (using
+        secure storage on mobile, or browser storage on web) after you enter it.
+        The key is never uploaded, hardcoded, or included in any public
+        repository. You can clear or change your key at any time in this
+        settings page.
+      </Text>
       {Platform.OS === "web" && (
         <Text style={styles.warning}>
           Warning: On web, storage is not fully secure (uses localStorage). For

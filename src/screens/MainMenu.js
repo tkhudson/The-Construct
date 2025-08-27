@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,9 +7,24 @@ import {
   ImageBackground,
 } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
+import { sessionLogExists } from "../utils/sessionLog";
 
 const MainMenu = ({ navigation }) => {
   const { theme } = useTheme();
+  const [canContinue, setCanContinue] = useState(false);
+
+  // Check if a session log exists
+  useEffect(() => {
+    async function checkSession() {
+      const exists = await sessionLogExists();
+      setCanContinue(exists);
+    }
+    checkSession();
+    // Optionally, listen for focus to update when returning to menu
+    const unsubscribe = navigation.addListener("focus", checkSession);
+    return unsubscribe;
+    // eslint-disable-next-line
+  }, [navigation]);
 
   // Background: image or gradient
   let backgroundElement = null;
@@ -45,8 +60,15 @@ const MainMenu = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: theme.button }]}
-        onPress={() => navigation.navigate("ContinueSession")}
+        style={[
+          styles.button,
+          { backgroundColor: canContinue ? theme.button : "#888" },
+        ]}
+        onPress={() => {
+          if (canContinue)
+            navigation.navigate("GameSession", { continueSession: true });
+        }}
+        disabled={!canContinue}
       >
         <Text style={[styles.buttonText, { color: theme.buttonText }]}>
           Continue Session
