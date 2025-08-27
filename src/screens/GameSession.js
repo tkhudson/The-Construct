@@ -19,6 +19,9 @@ import {
   clearSessionLog,
 } from "../utils/sessionLog";
 import MapGrid from "../components/MapGrid";
+import MapPanel from "../components/panels/MapPanel";
+
+import * as ImagePicker from "expo-image-picker";
 
 const GameSession = ({ navigation, route }) => {
   // Theme context
@@ -37,6 +40,22 @@ const GameSession = ({ navigation, route }) => {
   const [pendingCell, setPendingCell] = useState(null);
   const [tokenPromptType, setTokenPromptType] = useState("player");
   const [tokenPromptLabel, setTokenPromptLabel] = useState("");
+  const [tokenPromptImageUri, setTokenPromptImageUri] = useState(null);
+  // Default icon gallery (local assets or URLs)
+  const defaultTokenIcons = [
+    // You can replace these URLs with local assets if desired
+    "https://img.icons8.com/color/48/000000/knight.png",
+    "https://img.icons8.com/color/48/000000/wizard.png",
+    "https://img.icons8.com/color/48/000000/ogre.png",
+    "https://img.icons8.com/color/48/000000/ghost.png",
+    "https://img.icons8.com/color/48/000000/archer.png",
+    "https://img.icons8.com/color/48/000000/dragon.png",
+    "https://img.icons8.com/color/48/000000/treasure-chest.png",
+    "https://img.icons8.com/color/48/000000/elf-male.png",
+    "https://img.icons8.com/color/48/000000/robot-2.png",
+  ];
+  // Map panel state
+  const [mapPanelVisible, setMapPanelVisible] = useState(false);
 
   // Session timer state
   const config = route.params?.config || {};
@@ -322,127 +341,290 @@ const GameSession = ({ navigation, route }) => {
           :{(secondsLeft % 60).toString().padStart(2, "0")}
         </Text>
       </View>
-      {/* MapGrid */}
-      <MapGrid
-        tokens={tokens}
-        onPlaceToken={(x, y) => {
-          setPendingCell({ x, y });
-          setShowTokenPrompt(true);
-          setTokenPromptType("player");
-          setTokenPromptLabel("");
-        }}
-        onMoveToken={(tokenId, x, y) => {
-          setTokens((prev) =>
-            prev.map((t) => (t.id === tokenId ? { ...t, x, y } : t)),
-          );
-          setSelectedTokenId(null);
-        }}
-        selectedTokenId={selectedTokenId}
-        style={{ marginBottom: 8 }}
-      />
-      {/* Token prompt modal (simple inline for MVP) */}
-      {showTokenPrompt && (
-        <View style={styles.tokenPromptOverlay}>
-          <View style={styles.tokenPromptBox}>
-            <Text
-              style={{
-                color: theme.text,
-                fontWeight: "bold",
-                fontSize: 16,
-                marginBottom: 8,
-              }}
-            >
-              Place New Token
-            </Text>
-            <View style={{ flexDirection: "row", marginBottom: 8 }}>
-              {["player", "npc", "monster"].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.tokenTypeButton,
-                    {
-                      backgroundColor:
-                        tokenPromptType === type ? "#fff" : "#232946",
-                      borderColor:
-                        tokenPromptType === type ? "#7f9cf5" : "#393e6e",
-                    },
-                  ]}
-                  onPress={() => setTokenPromptType(type)}
-                >
-                  <Text
-                    style={{
-                      color: tokenPromptType === type ? "#232946" : "#eaeaea",
-                      fontWeight: "bold",
-                    }}
+      {/* MapPanel pop-out */}
+      <MapPanel
+        visible={mapPanelVisible}
+        onClose={() => setMapPanelVisible(false)}
+        theme={theme}
+        panelPosition="right"
+      >
+        <MapGrid
+          tokens={tokens}
+          onPlaceToken={(x, y) => {
+            setPendingCell({ x, y });
+            setShowTokenPrompt(true);
+            setTokenPromptType("player");
+            setTokenPromptLabel("");
+          }}
+          onMoveToken={(tokenId, x, y) => {
+            setTokens((prev) =>
+              prev.map((t) => (t.id === tokenId ? { ...t, x, y } : t)),
+            );
+            setSelectedTokenId(null);
+          }}
+          selectedTokenId={selectedTokenId}
+          style={{ marginBottom: 8 }}
+        />
+        {/* Token prompt modal (inline in panel) */}
+        {showTokenPrompt && (
+          <View style={styles.tokenPromptOverlay}>
+            <View style={styles.tokenPromptBox}>
+              <Text
+                style={{
+                  color: theme.text,
+                  fontWeight: "bold",
+                  fontSize: 16,
+                  marginBottom: 8,
+                }}
+              >
+                Place New Token
+              </Text>
+              <View style={{ flexDirection: "row", marginBottom: 8 }}>
+                {["player", "npc", "monster"].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.tokenTypeButton,
+                      {
+                        backgroundColor:
+                          tokenPromptType === type ? "#fff" : "#232946",
+                        borderColor:
+                          tokenPromptType === type ? "#7f9cf5" : "#393e6e",
+                      },
+                    ]}
+                    onPress={() => setTokenPromptType(type)}
                   >
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                    <Text
+                      style={{
+                        color: tokenPromptType === type ? "#232946" : "#eaeaea",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    color: theme.text,
+                    borderColor: theme.border,
+                    backgroundColor: "#23294699",
+                    marginBottom: 8,
+                    minHeight: 36,
+                    fontSize: 15,
+                  },
+                ]}
+                value={tokenPromptLabel}
+                onChangeText={setTokenPromptLabel}
+                placeholder="Label (optional)"
+                placeholderTextColor={theme.text + "99"}
+              />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { backgroundColor: theme.button, minWidth: 80 },
+                  ]}
+                  onPress={() => {
+                    setTokens((prev) => [
+                      ...prev,
+                      {
+                        id: Date.now().toString(),
+                        type: tokenPromptType,
+                        x: pendingCell.x,
+                        y: pendingCell.y,
+                        label: tokenPromptLabel,
+                        imageUri: tokenPromptImageUri,
+                      },
+                    ]);
+                    setShowTokenPrompt(false);
+                    setPendingCell(null);
+                    setTokenPromptLabel("");
+                    setTokenPromptImageUri(null);
+                    setTokenPromptType("player");
+                  }}
+                  disabled={!tokenPromptType || !tokenPromptImageUri}
+                >
+                  {/* Image Picker UI & Default Icon Gallery */}
+                  <View style={{ alignItems: "center", marginBottom: 8 }}>
+                    {/* Always show preview if image/icon is selected */}
+                    {tokenPromptImageUri && (
+                      <View style={{ alignItems: "center", marginBottom: 4 }}>
+                        <Image
+                          source={{ uri: tokenPromptImageUri }}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            marginBottom: 2,
+                            borderWidth: 3,
+                            borderColor: theme.accent || "#7f9cf5",
+                            backgroundColor: "#fff",
+                          }}
+                        />
+                        <TouchableOpacity
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            backgroundColor: "#393e6e",
+                            borderRadius: 8,
+                            marginBottom: 2,
+                          }}
+                          onPress={() => setTokenPromptImageUri(null)}
+                        >
+                          <Text style={{ color: "#fff", fontSize: 13 }}>
+                            Remove Image
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {!tokenPromptImageUri && (
+                      <>
+                        <TouchableOpacity
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            backgroundColor: theme.button,
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                          onPress={async () => {
+                            // Ask for permission
+                            const { status } =
+                              await ImagePicker.requestMediaLibraryPermissionsAsync();
+                            if (status !== "granted") {
+                              alert(
+                                "Permission to access media library is required!",
+                              );
+                              return;
+                            }
+                            let result =
+                              await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                allowsEditing: true,
+                                aspect: [1, 1],
+                                quality: 0.7,
+                              });
+                            if (
+                              !result.cancelled &&
+                              result.assets &&
+                              result.assets.length > 0
+                            ) {
+                              setTokenPromptImageUri(result.assets[0].uri);
+                            } else if (!result.cancelled && result.uri) {
+                              setTokenPromptImageUri(result.uri);
+                            }
+                          }}
+                        >
+                          <Text
+                            style={{ color: theme.buttonText, fontSize: 15 }}
+                          >
+                            Upload Token Image
+                          </Text>
+                        </TouchableOpacity>
+                        {/* Default Icon Gallery */}
+                        <Text
+                          style={{
+                            color: theme.text,
+                            fontSize: 13,
+                            marginBottom: 2,
+                          }}
+                        >
+                          Or pick a default icon:
+                        </Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            justifyContent: "center",
+                            marginBottom: 2,
+                          }}
+                        >
+                          {defaultTokenIcons.map((iconUri, idx) => {
+                            const isSelected = tokenPromptImageUri === iconUri;
+                            return (
+                              <TouchableOpacity
+                                key={iconUri}
+                                onPress={() => setTokenPromptImageUri(iconUri)}
+                                style={{
+                                  margin: 3,
+                                  borderWidth: isSelected ? 3 : 2,
+                                  borderColor: isSelected
+                                    ? theme.accent || "#7f9cf5"
+                                    : "#393e6e",
+                                  borderRadius: 20,
+                                  padding: isSelected ? 1 : 2,
+                                  backgroundColor: isSelected
+                                    ? "#fff"
+                                    : "#232946",
+                                  shadowColor: isSelected
+                                    ? theme.accent || "#7f9cf5"
+                                    : undefined,
+                                  shadowOpacity: isSelected ? 0.3 : 0,
+                                  shadowRadius: isSelected ? 4 : 0,
+                                  elevation: isSelected ? 3 : 0,
+                                }}
+                              >
+                                <Image
+                                  source={{ uri: iconUri }}
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    opacity: isSelected ? 1 : 0.85,
+                                  }}
+                                />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                  <Text
+                    style={[styles.buttonText, { color: theme.buttonText }]}
+                  >
+                    Place
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  color: theme.text,
-                  borderColor: theme.border,
-                  backgroundColor: "#23294699",
-                  marginBottom: 8,
-                  minHeight: 36,
-                  fontSize: 15,
-                },
-              ]}
-              value={tokenPromptLabel}
-              onChangeText={setTokenPromptLabel}
-              placeholder="Label (optional)"
-              placeholderTextColor={theme.text + "99"}
-            />
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: theme.button, minWidth: 80 },
-                ]}
-                onPress={() => {
-                  setTokens((prev) => [
-                    ...prev,
-                    {
-                      id: Date.now().toString(),
-                      type: tokenPromptType,
-                      x: pendingCell.x,
-                      y: pendingCell.y,
-                      label: tokenPromptLabel,
-                    },
-                  ]);
-                  setShowTokenPrompt(false);
-                  setPendingCell(null);
-                  setTokenPromptLabel("");
-                }}
-              >
-                <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-                  Place
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: "#b23b3b", minWidth: 80 },
-                ]}
-                onPress={() => {
-                  setShowTokenPrompt(false);
-                  setPendingCell(null);
-                  setTokenPromptLabel("");
-                }}
-              >
-                <Text style={[styles.buttonText, { color: "#fff" }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { backgroundColor: "#b23b3b", minWidth: 80 },
+                  ]}
+                  onPress={() => {
+                    setShowTokenPrompt(false);
+                    setPendingCell(null);
+                    setTokenPromptLabel("");
+                    setTokenPromptImageUri(null);
+                    setTokenPromptType("player");
+                  }}
+                >
+                  <Text style={[styles.buttonText, { color: "#fff" }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        )}
+      </MapPanel>
+      {/* Floating Map tab button */}
+      {!mapPanelVisible && (
+        <TouchableOpacity
+          style={styles.mapTabButton}
+          onPress={() => setMapPanelVisible(true)}
+        >
+          <Text style={styles.mapTabButtonText}>🗺️ Map</Text>
+        </TouchableOpacity>
       )}
       <FlatList
         data={messages}
@@ -470,6 +652,11 @@ const GameSession = ({ navigation, route }) => {
           placeholder="Enter your action..."
           placeholderTextColor={theme.text + "99"}
           multiline
+          onKeyPress={({ nativeEvent }) => {
+            if (nativeEvent.key === "Enter" && !nativeEvent.shiftKey) {
+              handleSubmit();
+            }
+          }}
         />
         <TouchableOpacity
           style={[
@@ -632,6 +819,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 4,
     borderWidth: 2,
+  },
+  mapTabButton: {
+    position: "absolute",
+    top: 90,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: "#7f9cf5",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  mapTabButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 18,
+    letterSpacing: 1,
   },
 });
 
