@@ -1,4 +1,3 @@
-TheConstruct/src/components/panels/InventoryPanel.js
 import React from "react";
 import {
   View,
@@ -7,6 +6,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ScrollView,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -88,7 +88,7 @@ const InventoryPanel = ({
           { duration: 250 },
           (finished) => {
             if (finished) runOnJS(onClose)();
-          }
+          },
         );
       } else {
         translateX.value = withTiming(openX, { duration: 250 });
@@ -107,6 +107,10 @@ const InventoryPanel = ({
           style={styles.overlay}
           activeOpacity={0.7}
           onPress={onClose}
+          // Use style.pointerEvents for web compatibility
+          {...(Platform.OS === "web"
+            ? { style: [styles.overlay, { pointerEvents: "auto" }] }
+            : {})}
         />
       )}
       {/* Animated Panel with gesture handler */}
@@ -120,6 +124,9 @@ const InventoryPanel = ({
               left: panelPosition === "left" ? 0 : undefined,
               backgroundColor: theme?.card || "#232946",
               borderColor: theme?.accent || "#7f9cf5",
+              ...(Platform.OS === "web"
+                ? { boxShadow: "0 4px 16px rgba(0,0,0,0.18)" }
+                : {}),
             },
           ]}
         >
@@ -148,9 +155,14 @@ const InventoryPanel = ({
             >
               Inventory
             </Text>
-            <ScrollView style={styles.inventoryScroll} contentContainerStyle={{ paddingBottom: 12 }}>
+            <ScrollView
+              style={styles.inventoryScroll}
+              contentContainerStyle={{ paddingBottom: 12 }}
+            >
               {inventory.length === 0 && (
-                <Text style={{ color: "#aaa", textAlign: "center", marginTop: 8 }}>
+                <Text
+                  style={{ color: "#aaa", textAlign: "center", marginTop: 8 }}
+                >
                   Your inventory is empty.
                 </Text>
               )}
@@ -170,7 +182,12 @@ const InventoryPanel = ({
                   {grouped[type].map((item) => (
                     <View key={item.id} style={styles.itemRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: theme?.text || "#fff", fontWeight: "bold" }}>
+                        <Text
+                          style={{
+                            color: theme?.text || "#fff",
+                            fontWeight: "bold",
+                          }}
+                        >
                           {item.name}
                           {item.quantity > 1 ? ` x${item.quantity}` : ""}
                         </Text>
@@ -188,7 +205,12 @@ const InventoryPanel = ({
                           ]}
                           onPress={() => onUseItem(item)}
                         >
-                          <Text style={{ color: theme?.buttonText || "#232946", fontSize: 13 }}>
+                          <Text
+                            style={{
+                              color: theme?.buttonText || "#232946",
+                              fontSize: 13,
+                            }}
+                          >
                             Use
                           </Text>
                         </TouchableOpacity>
@@ -223,6 +245,9 @@ const InventoryPanel = ({
               right: panelPosition === "right" ? 0 : undefined,
               left: panelPosition === "left" ? 0 : undefined,
               backgroundColor: theme?.accent || "#7f9cf5",
+              ...(Platform.OS === "web"
+                ? { boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }
+                : {}),
             },
           ]}
           onPress={onOpen}
@@ -249,6 +274,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     borderLeftWidth: 2,
     borderRightWidth: 2,
+    // shadow* props are kept for native, but web uses boxShadow above
     shadowColor: "#000",
     shadowOpacity: 0.18,
     shadowRadius: 12,
@@ -314,6 +340,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     borderBottomRightRadius: 16,
     elevation: 4,
+    // shadow* props are kept for native, but web uses boxShadow above
     shadowColor: "#000",
     shadowOpacity: 0.12,
     shadowRadius: 4,

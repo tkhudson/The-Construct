@@ -45,6 +45,7 @@ const DiceRollerPanel = ({
   onRoll, // function({ label, sides, count, rolls, total }) => void
   theme,
   panelPosition = "right", // "right" or "left"
+  anyPanelOpen = false,
 }) => {
   const [numDice, setNumDice] = useState(1);
   const [rollHistory, setRollHistory] = useState([]);

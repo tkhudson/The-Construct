@@ -663,7 +663,9 @@ const GameSession = ({ navigation, route }) => {
         inventory={inventory}
         theme={theme}
         panelPosition="right"
-        anyPanelOpen={mapPanelVisible || dicePanelVisible || inventoryPanelVisible}
+        anyPanelOpen={
+          mapPanelVisible || dicePanelVisible || inventoryPanelVisible
+        }
         onUseItem={(item) => {
           // Example: Remove one quantity and post to chat
           setInventory((prev) =>
@@ -671,9 +673,9 @@ const GameSession = ({ navigation, route }) => {
               .map((i) =>
                 i.id === item.id
                   ? { ...i, quantity: i.quantity > 1 ? i.quantity - 1 : 0 }
-                  : i
+                  : i,
               )
-              .filter((i) => i.quantity > 0)
+              .filter((i) => i.quantity > 0),
           );
           setMessages((prev) => [
             ...prev,
@@ -752,55 +754,6 @@ const GameSession = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
-      export default GameSession;
-    </KeyboardAvoidingView>
-);
-
-const GameSession = (props) => {
-  // ...all your logic...
-
-  return (
-    <KeyboardAvoidingView>
-      {/* ...main UI... */}
-
-      {/* Continue button if last AI message is cut off */}
-      {messages.length > 0 &&
-        isCutOff(messages[messages.length - 1].text) &&
-        messages[messages.length - 1].isDM && (
-          <View style={{ alignItems: "center", marginVertical: 10 }}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: theme.button, paddingHorizontal: 32 },
-              ]}
-              onPress={handleContinue}
-              disabled={isContinuing}
-            >
-              <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-                {isContinuing ? "Continuing..." : "Continue"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-      {/* End Session button */}
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: "#b23b3b",
-            margin: 16,
-            alignSelf: "center",
-            paddingHorizontal: 32,
-          },
-        ]}
-        onPress={async () => {
-          await clearSessionLog();
-          navigation.navigate("MainMenu");
-        }}
-      >
-        <Text style={[styles.buttonText, { color: "#fff" }]}>End Session</Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -929,5 +882,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
-
 export default GameSession;
