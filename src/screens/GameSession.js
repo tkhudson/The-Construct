@@ -20,6 +20,8 @@ import {
 } from "../utils/sessionLog";
 import MapGrid from "../components/MapGrid";
 import MapPanel from "../components/panels/MapPanel";
+import DiceRollerPanel from "../components/panels/DiceRollerPanel";
+import InventoryPanel from "../components/panels/InventoryPanel";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -56,6 +58,16 @@ const GameSession = ({ navigation, route }) => {
   ];
   // Map panel state
   const [mapPanelVisible, setMapPanelVisible] = useState(false);
+  // Dice roller panel state
+  const [dicePanelVisible, setDicePanelVisible] = useState(false);
+  // Inventory panel state
+  const [inventoryPanelVisible, setInventoryPanelVisible] = useState(false);
+
+  // Inventory state
+  const [inventory, setInventory] = useState([
+    // Example starter item
+    // { id: "1", name: "Short Sword", type: "Weapon", description: "A basic sword.", quantity: 1 }
+  ]);
 
   // Session timer state
   const config = route.params?.config || {};
@@ -345,8 +357,10 @@ const GameSession = ({ navigation, route }) => {
       <MapPanel
         visible={mapPanelVisible}
         onClose={() => setMapPanelVisible(false)}
+        onOpen={() => setMapPanelVisible(true)}
         theme={theme}
         panelPosition="right"
+        anyPanelOpen={mapPanelVisible || dicePanelVisible}
       >
         <MapGrid
           tokens={tokens}
@@ -617,15 +631,77 @@ const GameSession = ({ navigation, route }) => {
           </View>
         )}
       </MapPanel>
-      {/* Floating Map tab button */}
-      {!mapPanelVisible && (
-        <TouchableOpacity
-          style={styles.mapTabButton}
-          onPress={() => setMapPanelVisible(true)}
-        >
-          <Text style={styles.mapTabButtonText}>🗺️ Map</Text>
-        </TouchableOpacity>
-      )}
+      {/* Dice Roller Panel */}
+      <DiceRollerPanel
+        visible={dicePanelVisible}
+        onClose={() => setDicePanelVisible(false)}
+        onOpen={() => setDicePanelVisible(true)}
+        onRoll={(result) => {
+          // Post roll result to chat/log
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${prev.length + 1}`,
+              text:
+                `🎲 You rolled ${result.count > 1 ? result.count + result.label : result.label}: ` +
+                `${result.rolls.join(", ")} (Total: ${result.total})`,
+              isDM: false,
+              isDiceRoll: true,
+              dice: result,
+            },
+          ]);
+        }}
+        theme={theme}
+        panelPosition="right"
+        anyPanelOpen={mapPanelVisible || dicePanelVisible}
+      />
+
+      <InventoryPanel
+        visible={inventoryPanelVisible}
+        onClose={() => setInventoryPanelVisible(false)}
+        onOpen={() => setInventoryPanelVisible(true)}
+        inventory={inventory}
+        theme={theme}
+        panelPosition="right"
+        anyPanelOpen={
+          mapPanelVisible || dicePanelVisible || inventoryPanelVisible
+        }
+        onUseItem={(item) => {
+          // Example: Remove one quantity and post to chat
+          setInventory((prev) =>
+            prev
+              .map((i) =>
+                i.id === item.id
+                  ? { ...i, quantity: i.quantity > 1 ? i.quantity - 1 : 0 }
+                  : i,
+              )
+              .filter((i) => i.quantity > 0),
+          );
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${prev.length + 1}`,
+              text: `🧰 You used ${item.name}.`,
+              isDM: false,
+              isInventory: true,
+              item,
+            },
+          ]);
+        }}
+        onDropItem={(item) => {
+          setInventory((prev) => prev.filter((i) => i.id !== item.id));
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `${prev.length + 1}`,
+              text: `🧰 You dropped ${item.name}.`,
+              isDM: false,
+              isInventory: true,
+              item,
+            },
+          ]);
+        }}
+      />
       <FlatList
         data={messages}
         renderItem={renderMessage}
@@ -678,42 +754,6 @@ const GameSession = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
-      {/* Continue button if last AI message is cut off */}
-      {messages.length > 0 &&
-        isCutOff(messages[messages.length - 1].text) &&
-        messages[messages.length - 1].isDM && (
-          <View style={{ alignItems: "center", marginVertical: 10 }}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: theme.button, paddingHorizontal: 32 },
-              ]}
-              onPress={handleContinue}
-              disabled={isContinuing}
-            >
-              <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-                {isContinuing ? "Continuing..." : "Continue"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: "#b23b3b",
-            margin: 16,
-            alignSelf: "center",
-            paddingHorizontal: 32,
-          },
-        ]}
-        onPress={async () => {
-          await clearSessionLog();
-          navigation.navigate("MainMenu");
-        }}
-      >
-        <Text style={[styles.buttonText, { color: "#fff" }]}>End Session</Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -842,5 +882,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
-
 export default GameSession;

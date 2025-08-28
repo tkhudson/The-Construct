@@ -104,7 +104,6 @@ const CharacterCreation = ({ navigation, route }) => {
             borderColor: theme.border,
           },
         ]}
-        dropdownIconColor={theme.accent}
         enabled={characterOptions.races.length > 1}
       >
         {characterOptions.races.map((race) => (
@@ -124,7 +123,6 @@ const CharacterCreation = ({ navigation, route }) => {
             borderColor: theme.border,
           },
         ]}
-        dropdownIconColor={theme.accent}
       >
         {characterOptions.classes.map((cls) => (
           <Picker.Item key={cls} label={cls} value={cls} />
@@ -143,7 +141,6 @@ const CharacterCreation = ({ navigation, route }) => {
             borderColor: theme.border,
           },
         ]}
-        dropdownIconColor={theme.accent}
       >
         {characterOptions.backgrounds.map((bg) => (
           <Picker.Item key={bg} label={bg} value={bg} />
