@@ -3,10 +3,11 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainMenu from "./screens/MainMenu";
 import CharacterCreation from "./screens/CharacterCreation";
-import GameSession from "./screens/GameSession";
+import RefinedGameSession from "./screens/RefinedGameSession";
 import SessionSetup from "./screens/SessionSetup";
 import Settings from "./screens/Settings";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Placeholder screen component
 function PlaceholderScreen({ route }) {
@@ -22,23 +23,28 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   return (
     <ThemeProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="MainMenu">
-          <Stack.Screen
-            name="MainMenu"
-            component={MainMenu}
-            options={{ title: "The Construct" }}
-          />
-          <Stack.Screen name="NewGame" component={SessionSetup} />
-          <Stack.Screen
-            name="CharacterCreation"
-            component={CharacterCreation}
-          />
-          <Stack.Screen name="ContinueSession" component={PlaceholderScreen} />
-          <Stack.Screen name="Settings" component={Settings} />
-          <Stack.Screen name="GameSession" component={GameSession} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <ErrorBoundary>
+        <NavigationContainer>
+          <Stack.Navigator initialRouteName="MainMenu">
+            <Stack.Screen
+              name="MainMenu"
+              component={MainMenu}
+              options={{ title: "The Construct" }}
+            />
+            <Stack.Screen name="NewGame" component={SessionSetup} />
+            <Stack.Screen
+              name="CharacterCreation"
+              component={CharacterCreation}
+            />
+            <Stack.Screen
+              name="ContinueSession"
+              component={PlaceholderScreen}
+            />
+            <Stack.Screen name="Settings" component={Settings} />
+            <Stack.Screen name="GameSession" component={RefinedGameSession} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

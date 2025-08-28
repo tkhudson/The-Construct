@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Dimensions,
   ScrollView,
+  AccessibilityInfo,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -16,6 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { PanGestureHandler } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
+import * as HapticFeedback from "expo-haptics";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PANEL_WIDTH = Math.min(340, SCREEN_WIDTH * 0.8);
@@ -104,29 +107,71 @@ const DiceRollerPanel = ({
     },
   });
 
-  const handleRoll = (die) => {
-    const rolls = rollDice(die.sides, numDice);
-    const total = rolls.reduce((a, b) => a + b, 0);
-    const result = {
-      label: die.label,
-      sides: die.sides,
-      count: numDice,
-      rolls,
-      total,
-      timestamp: Date.now(),
-    };
-    setRollHistory((prev) => [result, ...prev.slice(0, 19)]);
-    if (onRoll) onRoll(result);
-  };
+  const handleRoll = useCallback(
+    async (die) => {
+      try {
+        const rolls = rollDice(die.sides, numDice);
+        const total = rolls.reduce((a, b) => a + b, 0);
+        const result = {
+          label: die.label,
+          sides: die.sides,
+          count: numDice,
+          rolls,
+          total,
+          timestamp: Date.now(),
+        };
+
+        setRollHistory((prev) => [result, ...prev.slice(0, 19)]);
+
+        // Provide haptic feedback if available
+        if (Platform.OS === "ios" && HapticFeedback) {
+          HapticFeedback.selection();
+        }
+
+        if (onRoll) onRoll(result);
+
+        // Accessibility announcement
+        await AccessibilityInfo.announceForAccessibility(
+          `Rolled ${result.count} ${result.label}: ${result.rolls.join(", ")}, total ${result.total}`,
+        );
+      } catch (error) {
+        console.error("Dice roll error:", error);
+        await AccessibilityInfo.announceForAccessibility(
+          "Failed to roll dice. Please try again.",
+        );
+      }
+    },
+    [numDice, onRoll],
+  );
+
+  // Manage focus and accessibility
+  const handleClose = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onClose();
+    await AccessibilityInfo.announceForAccessibility("Dice roller closed");
+  }, [onClose]);
+
+  const handleOpen = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onOpen();
+    await AccessibilityInfo.announceForAccessibility("Dice roller opened");
+  }, [onOpen]);
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - only render when visible to prevent focus issues */}
       {visible && (
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={0.7}
-          onPress={onClose}
+          onPress={handleClose}
+          accessible={true}
+          accessibilityLabel="Close dice roller overlay"
+          accessibilityHint="Tap to close the dice roller"
         />
       )}
       {/* Animated Panel with gesture handler */}
@@ -142,12 +187,26 @@ const DiceRollerPanel = ({
               borderColor: theme?.accent || "#7f9cf5",
             },
           ]}
+          accessible={visible}
+          accessibilityRole="dialog"
+          accessibilityLabel="Dice roller panel"
+          {...(Platform.OS === "web"
+            ? {
+                "aria-hidden": !visible,
+                "aria-modal": visible,
+                "aria-labelledby": "dice-panel-title",
+              }
+            : {})}
         >
           {/* Close Button */}
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={12}
+            accessible={true}
+            accessibilityLabel="Close dice roller"
+            accessibilityHint="Double tap to close the dice rolling panel"
+            nativeID="dice-panel-close"
           >
             <Ionicons
               name="close"
@@ -155,17 +214,13 @@ const DiceRollerPanel = ({
               color={theme?.accent || "#7f9cf5"}
             />
           </TouchableOpacity>
-          <View style={styles.panelContent}>
-            <Text
-              style={{
-                color: theme?.accent || "#7f9cf5",
-                fontWeight: "bold",
-                fontSize: 20,
-                marginBottom: 10,
-                textAlign: "center",
-                letterSpacing: 1,
-              }}
-            >
+          <View
+            style={styles.panelContent}
+            accessible={visible}
+            accessibilityRole="main"
+            nativeID="dice-panel-content"
+          >
+            <Text nativeID="dice-panel-title" style={styles.panelTitle}>
               Dice Roller
             </Text>
             {/* Number of dice selector */}
@@ -179,6 +234,9 @@ const DiceRollerPanel = ({
                   { backgroundColor: theme?.button || "#393e6e" },
                 ]}
                 onPress={() => setNumDice((n) => Math.max(1, n - 1))}
+                accessible={true}
+                accessibilityLabel="Decrease number of dice"
+                accessibilityHint={`Currently set to ${numDice} dice, minimum is 1`}
               >
                 <Text
                   style={{ color: theme?.buttonText || "#fff", fontSize: 18 }}
@@ -195,6 +253,8 @@ const DiceRollerPanel = ({
                   minWidth: 24,
                   textAlign: "center",
                 }}
+                accessible={true}
+                accessibilityLabel={`Number of dice: ${numDice}`}
               >
                 {numDice}
               </Text>
@@ -204,6 +264,9 @@ const DiceRollerPanel = ({
                   { backgroundColor: theme?.button || "#393e6e" },
                 ]}
                 onPress={() => setNumDice((n) => Math.min(20, n + 1))}
+                accessible={true}
+                accessibilityLabel="Increase number of dice"
+                accessibilityHint={`Currently set to ${numDice} dice, maximum is 20`}
               >
                 <Text
                   style={{ color: theme?.buttonText || "#fff", fontSize: 18 }}
@@ -226,6 +289,9 @@ const DiceRollerPanel = ({
                   ]}
                   onPress={() => handleRoll(die)}
                   activeOpacity={0.8}
+                  accessible={true}
+                  accessibilityLabel={`Roll ${die.label} dice`}
+                  accessibilityHint={`Roll ${numDice} ${die.label} with ${die.sides} sides each`}
                 >
                   <Text
                     style={{
@@ -251,22 +317,33 @@ const DiceRollerPanel = ({
                 textAlign: "center",
                 letterSpacing: 0.5,
               }}
+              accessible={true}
+              accessibilityRole="header"
             >
               Roll History
             </Text>
             <ScrollView
               style={styles.historyScroll}
               contentContainerStyle={{ paddingBottom: 12 }}
+              accessible={true}
+              accessibilityLabel="Dice roll history"
             >
               {rollHistory.length === 0 && (
                 <Text
                   style={{ color: "#aaa", textAlign: "center", marginTop: 8 }}
+                  accessible={true}
+                  accessibilityRole="text"
                 >
                   No rolls yet.
                 </Text>
               )}
               {rollHistory.map((roll) => (
-                <View key={roll.timestamp} style={styles.historyItem}>
+                <View
+                  key={roll.timestamp}
+                  style={styles.historyItem}
+                  accessible={true}
+                  accessibilityLabel={`Roll ${roll.count > 1 ? roll.count : ""}${roll.label}: ${roll.rolls.join(", ")}, total ${roll.total}`}
+                >
                   <Text
                     style={{
                       color: theme?.accent || "#7f9cf5",
@@ -285,7 +362,7 @@ const DiceRollerPanel = ({
           </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Dice Tab Button */}
+      {/* Dice Tab Button - only render when panel is closed */}
       {!visible && !anyPanelOpen && (
         <TouchableOpacity
           style={[
@@ -296,7 +373,10 @@ const DiceRollerPanel = ({
               backgroundColor: theme?.accent || "#7f9cf5",
             },
           ]}
-          onPress={onOpen}
+          onPress={handleOpen}
+          accessible={true}
+          accessibilityLabel="Open dice roller"
+          accessibilityHint="Double tap to open the dice rolling panel"
         >
           <Ionicons name="dice" size={24} color="#fff" />
           <Text style={styles.tabButtonText}>Dice</Text>
@@ -342,6 +422,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-start",
     alignItems: "stretch",
+  },
+  panelTitle: {
+    color: "#7f9cf5",
+    fontWeight: "bold",
+    fontSize: 20,
+    marginBottom: 10,
+    textAlign: "center",
+    letterSpacing: 1,
   },
   diceRow: {
     flexDirection: "row",

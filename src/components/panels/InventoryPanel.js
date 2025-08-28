@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Dimensions,
   ScrollView,
   Platform,
+  AccessibilityInfo,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -96,17 +97,37 @@ const InventoryPanel = ({
     },
   });
 
-  // Group inventory by type
-  const grouped = groupItemsByType(inventory);
+  // Memoize grouped inventory for performance
+  const grouped = useMemo(() => groupItemsByType(inventory), [inventory]);
+
+  // Manage focus and accessibility
+  const handleClose = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onClose();
+    await AccessibilityInfo.announceForAccessibility("Inventory closed");
+  }, [onClose]);
+
+  const handleOpen = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onOpen();
+    await AccessibilityInfo.announceForAccessibility("Inventory opened");
+  }, [onOpen]);
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - only render when visible to prevent focus issues */}
       {visible && (
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={0.7}
-          onPress={onClose}
+          onPress={handleClose}
+          accessible={true}
+          accessibilityLabel="Close inventory overlay"
+          accessibilityHint="Tap to close the inventory panel"
           // Use style.pointerEvents for web compatibility
           {...(Platform.OS === "web"
             ? { style: [styles.overlay, { pointerEvents: "auto" }] }
@@ -129,12 +150,26 @@ const InventoryPanel = ({
                 : {}),
             },
           ]}
+          accessible={visible}
+          accessibilityRole="dialog"
+          accessibilityLabel="Inventory panel"
+          {...(Platform.OS === "web"
+            ? {
+                "aria-hidden": !visible,
+                "aria-modal": visible,
+                "aria-labelledby": "inventory-panel-title",
+              }
+            : {})}
         >
           {/* Close Button */}
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={12}
+            accessible={true}
+            accessibilityLabel="Close inventory"
+            accessibilityHint="Double tap to close the inventory panel"
+            nativeID="inventory-panel-close"
           >
             <Ionicons
               name="close"
@@ -142,17 +177,13 @@ const InventoryPanel = ({
               color={theme?.accent || "#7f9cf5"}
             />
           </TouchableOpacity>
-          <View style={styles.panelContent}>
-            <Text
-              style={{
-                color: theme?.accent || "#7f9cf5",
-                fontWeight: "bold",
-                fontSize: 20,
-                marginBottom: 10,
-                textAlign: "center",
-                letterSpacing: 1,
-              }}
-            >
+          <View
+            style={styles.panelContent}
+            accessible={visible}
+            accessibilityRole="main"
+            nativeID="inventory-panel-content"
+          >
+            <Text nativeID="inventory-panel-title" style={styles.panelTitle}>
               Inventory
             </Text>
             <ScrollView
@@ -162,6 +193,8 @@ const InventoryPanel = ({
               {inventory.length === 0 && (
                 <Text
                   style={{ color: "#aaa", textAlign: "center", marginTop: 8 }}
+                  accessible={true}
+                  accessibilityRole="text"
                 >
                   Your inventory is empty.
                 </Text>
@@ -176,8 +209,11 @@ const InventoryPanel = ({
                       marginBottom: 4,
                       marginTop: 10,
                     }}
+                    accessible={true}
+                    accessibilityRole="header"
+                    accessibilityLevel={3}
                   >
-                    {type}
+                    {type} ({grouped[type].length} items)
                   </Text>
                   {grouped[type].map((item) => (
                     <View key={item.id} style={styles.itemRow}>
@@ -187,12 +223,16 @@ const InventoryPanel = ({
                             color: theme?.text || "#fff",
                             fontWeight: "bold",
                           }}
+                          accessible={true}
                         >
                           {item.name}
                           {item.quantity > 1 ? ` x${item.quantity}` : ""}
                         </Text>
                         {item.description && (
-                          <Text style={{ color: "#aaa", fontSize: 13 }}>
+                          <Text
+                            style={{ color: "#aaa", fontSize: 13 }}
+                            accessible={true}
+                          >
                             {item.description}
                           </Text>
                         )}
@@ -203,7 +243,15 @@ const InventoryPanel = ({
                             styles.actionButton,
                             { backgroundColor: theme?.button || "#7ed6a7" },
                           ]}
-                          onPress={() => onUseItem(item)}
+                          onPress={useCallback(() => {
+                            onUseItem(item);
+                            AccessibilityInfo.announceForAccessibility(
+                              `Used ${item.name}`,
+                            );
+                          }, [item, onUseItem])}
+                          accessible={true}
+                          accessibilityLabel={`Use ${item.name}`}
+                          accessibilityHint={`Use this item from your inventory`}
                         >
                           <Text
                             style={{
@@ -221,9 +269,22 @@ const InventoryPanel = ({
                             styles.actionButton,
                             { backgroundColor: "#b23b3b" },
                           ]}
-                          onPress={() => onDropItem(item)}
+                          onPress={useCallback(() => {
+                            onDropItem(item);
+                            AccessibilityInfo.announceForAccessibility(
+                              `Dropped ${item.name}`,
+                            );
+                          }, [item, onDropItem])}
+                          accessible={true}
+                          accessibilityLabel={`Drop ${item.name}`}
+                          accessibilityHint={`Remove this item from your inventory`}
                         >
-                          <Text style={{ color: "#fff", fontSize: 13 }}>
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontSize: 13,
+                            }}
+                          >
                             Drop
                           </Text>
                         </TouchableOpacity>
@@ -236,7 +297,7 @@ const InventoryPanel = ({
           </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Inventory Tab Button */}
+      {/* Inventory Tab Button - only render when panel is closed */}
       {!visible && !anyPanelOpen && (
         <TouchableOpacity
           style={[
@@ -250,7 +311,10 @@ const InventoryPanel = ({
                 : {}),
             },
           ]}
-          onPress={onOpen}
+          onPress={handleOpen}
+          accessible={true}
+          accessibilityLabel={`Open inventory${inventory.length > 0 ? ` (${inventory.length} items)` : ""}`}
+          accessibilityHint="Double tap to open your inventory panel"
         >
           <Ionicons name="bag" size={24} color="#fff" />
           <Text style={styles.tabButtonText}>Inventory</Text>
@@ -297,6 +361,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-start",
     alignItems: "stretch",
+  },
+  panelTitle: {
+    color: "#7f9cf5",
+    fontWeight: "bold",
+    fontSize: 20,
+    marginBottom: 10,
+    textAlign: "center",
+    letterSpacing: 1,
+  },
+  actionButton: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 44,
+    minHeight: 28,
+    elevation: 1,
   },
   inventoryScroll: {
     flex: 1,
@@ -354,4 +437,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default InventoryPanel;
+export default React.memo(InventoryPanel);

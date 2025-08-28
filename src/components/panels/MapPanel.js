@@ -1,10 +1,12 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
   Dimensions,
   TouchableOpacity,
   Text,
+  AccessibilityInfo,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -15,6 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { PanGestureHandler } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
+import * as HapticFeedback from "expo-haptics";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PANEL_WIDTH = Math.min(380, SCREEN_WIDTH * 0.85);
@@ -48,6 +51,23 @@ const MapPanel = ({
       ],
     };
   });
+
+  // Manage focus and accessibility
+  const handleClose = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onClose();
+    await AccessibilityInfo.announceForAccessibility("Map panel closed");
+  }, [onClose]);
+
+  const handleOpen = useCallback(async () => {
+    if (Platform.OS === "ios" && HapticFeedback) {
+      HapticFeedback.selection();
+    }
+    onOpen();
+    await AccessibilityInfo.announceForAccessibility("Map panel opened");
+  }, [onOpen]);
 
   // Gesture handler for swipe-to-close
   const gestureHandler = useAnimatedGestureHandler({
@@ -89,14 +109,18 @@ const MapPanel = ({
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - only render when visible to prevent focus issues */}
       {visible && (
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={0.7}
-          onPress={onClose}
+          onPress={handleClose}
+          accessible={true}
+          accessibilityLabel="Close map panel overlay"
+          accessibilityHint="Tap to close the map panel"
         />
       )}
+
       {/* Animated Panel with gesture handler */}
       <PanGestureHandler enabled={visible} onGestureEvent={gestureHandler}>
         <Animated.View
@@ -110,12 +134,26 @@ const MapPanel = ({
               borderColor: theme?.accent || "#7f9cf5",
             },
           ]}
+          accessible={visible}
+          accessibilityRole="dialog"
+          accessibilityLabel="Map panel"
+          {...(Platform.OS === "web"
+            ? {
+                "aria-hidden": !visible,
+                "aria-modal": visible,
+                "aria-labelledby": "map-panel-title",
+              }
+            : {})}
         >
           {/* Close Button */}
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={12}
+            accessible={true}
+            accessibilityLabel="Close map panel"
+            accessibilityHint="Double tap to close the tactical map"
+            nativeID="map-panel-close"
           >
             <Ionicons
               name="close"
@@ -123,10 +161,27 @@ const MapPanel = ({
               color={theme?.accent || "#7f9cf5"}
             />
           </TouchableOpacity>
-          <View style={styles.panelContent}>{children}</View>
+
+          {/* Panel Content */}
+          <View
+            style={styles.panelContent}
+            accessible={visible}
+            accessibilityRole="main"
+            nativeID="map-panel-content"
+          >
+            <Text
+              nativeID="map-panel-title"
+              style={[styles.panelTitle, { color: theme?.accent || "#7f9cf5" }]}
+              accessible={false} // Already announced by parent
+            >
+              Tactical Map
+            </Text>
+            {children}
+          </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Map Tab Button */}
+
+      {/* Map Tab Button - only render when panel is closed */}
       {!visible && !anyPanelOpen && (
         <TouchableOpacity
           style={[
@@ -137,7 +192,10 @@ const MapPanel = ({
               backgroundColor: theme?.accent || "#7f9cf5",
             },
           ]}
-          onPress={onOpen}
+          onPress={handleOpen}
+          accessible={true}
+          accessibilityLabel="Open tactical map"
+          accessibilityHint="Double tap to open the tactical grid map for combat and exploration"
         >
           <Ionicons name="map" size={24} color="#fff" />
           <Text style={styles.tabButtonText}>Map</Text>
@@ -158,7 +216,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: PANEL_WIDTH,
-    zIndex: 20,
+    zIndex: 25, // Increased to ensure it appears above other panels
     borderLeftWidth: 2,
     borderRightWidth: 2,
     shadowColor: "#000",
@@ -173,7 +231,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 12,
-    zIndex: 30,
+    zIndex: 35, // Increased to ensure it appears above panel content
     backgroundColor: "#232946cc",
     borderRadius: 16,
     padding: 2,
@@ -184,10 +242,17 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "stretch",
   },
+  panelTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
   tabButton: {
     position: "absolute",
-    top: 80,
-    zIndex: 30,
+    top: 100, // Moved down slightly to avoid overlap with other panels
+    zIndex: 35,
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
@@ -210,4 +275,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MapPanel;
+export default React.memo(MapPanel);
