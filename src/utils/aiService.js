@@ -111,14 +111,7 @@ function generateStubResponse(playerAction, config, character, history) {
     return rollAnalysis.guidance;
   }
 
-  // Add session time awareness to stub responses
-  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
-  const timeNote =
-    sessionTimeMinutes <= 30
-      ? " (keeping things quick for your short session!)"
-      : "";
-
-  return `The DM narrates${timeNote}: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
+  return `The DM narrates: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
 }
 
 // Function to retrieve stored AI settings (cross-platform: SecureStore for native, AsyncStorage for web)
@@ -178,20 +171,10 @@ function buildPrompt(
   // Analyze the player's action for roll requests
   const rollAnalysis = analyzeRollRequest(playerAction);
 
-  // Session time management and pacing guidance
-  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
-  const pacingGuidance = getPacingGuidance(sessionTimeMinutes);
-
   const systemMessage = `
 You are an AI Dungeon Master for a D&D 5e game. Adhere to 5e rules: character stats (e.g., Strength, Dexterity), classes (${character.class || "Fighter"}), races (${character.race || "Human"}), skills, spells, combat (initiative, attack rolls, saving throws).
-Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Time - ${sessionTimeMinutes} minutes (${config.sessionTime || "1 hour"}), Mode - ${config.campaignMode || "One-shot"}.
+Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Mode - ${config.campaignMode || "One-shot"}.
 Player character: Race - ${character.race || "Human"} (Traits: ${raceDetails}), Class - ${character.class || "Fighter"} (Features: ${classDetails}), Background - ${character.background || "Acolyte"}, Backstory - ${character.backstory || "A wandering hero"}.
-
-SESSION TIME MANAGEMENT: This is a ${sessionTimeMinutes}-minute session. ${pacingGuidance}
-- Track session progress and ensure the adventure fits within the time limit
-- Pace encounters, dialogue, and objectives according to the session length
-- Provide reminders about remaining time when appropriate
-- Focus on ${sessionTimeMinutes <= 30 ? "action and combat" : sessionTimeMinutes <= 60 ? "balanced exploration and encounters" : "deep exploration and roleplaying"}
 
 SESSION STORAGE: Players can save and export their progress at any time. Remind them of major milestones where saving would be beneficial (after completing major objectives, before difficult encounters, etc.).
 
@@ -406,26 +389,9 @@ async function queryAI(playerAction, config, character, history) {
   }
 }
 
-/**
- * Get pacing guidance based on session duration
- * @param {number} sessionTimeMinutes - Session length in minutes
- * @returns {string} Pacing guidance for the AI DM
- */
-function getPacingGuidance(sessionTimeMinutes) {
-  if (sessionTimeMinutes <= 15) {
-    return "This is an ULTRA-SHORT session! Focus on ONE main encounter or objective. Keep descriptions brief, limit side activities, and drive toward a quick resolution. Aim for 1-2 significant moments only.";
-  } else if (sessionTimeMinutes <= 30) {
-    return "This is a SHORT session! Focus on 1-2 encounters maximum. Be efficient with descriptions, prioritize action over extensive dialogue, and ensure clear objectives with quick resolutions.";
-  } else if (sessionTimeMinutes <= 60) {
-    return "This is a STANDARD session! Balance exploration and encounters appropriately. Allow some roleplaying and side objectives, but maintain good pacing to fit everything comfortably.";
-  } else if (sessionTimeMinutes <= 120) {
-    return "This is a LONG session! Allow deeper exploration, more complex encounters, extensive roleplaying opportunities, and multiple objectives with room for character development.";
-  } else {
-    return "This is an EXTENDED session! Provide rich world-building, complex multi-stage encounters, extensive character interactions, and deep narrative exploration with plenty of time for detailed roleplaying.";
-  }
-}
+// Removed pacing guidance function as it's no longer needed
 
-export { queryAI, testDMRollRule, analyzeRollRequest, getPacingGuidance };
+export { queryAI, testDMRollRule, analyzeRollRequest };
 
 // To add more providers, extend the queryAI function and update the Settings UI accordingly.
 // Use testDMRollRule() in development to verify DM roll rule implementation.
