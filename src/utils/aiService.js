@@ -111,14 +111,7 @@ function generateStubResponse(playerAction, config, character, history) {
     return rollAnalysis.guidance;
   }
 
-  // Add session time awareness to stub responses
-  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
-  const timeNote =
-    sessionTimeMinutes <= 30
-      ? " (keeping things quick for your short session!)"
-      : "";
-
-  return `The DM narrates${timeNote}: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
+  return `The DM narrates: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
 }
 
 // Function to retrieve stored AI settings (cross-platform: SecureStore for native, AsyncStorage for web)
@@ -178,24 +171,10 @@ function buildPrompt(
   // Analyze the player's action for roll requests
   const rollAnalysis = analyzeRollRequest(playerAction);
 
-  // Session time management and pacing guidance
-  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
-  const pacingGuidance = getPacingGuidance(sessionTimeMinutes);
-
-  // Enhanced response templates for better gameplay
-  const responseTemplates = getThematicResponseTemplates(config.theme);
-  const contextualHints = getContextualHints(playerAction, character, history);
-
   const systemMessage = `
 You are an AI Dungeon Master for a D&D 5e game. Adhere to 5e rules: character stats (e.g., Strength, Dexterity), classes (${character.class || "Fighter"}), races (${character.race || "Human"}), skills, spells, combat (initiative, attack rolls, saving throws).
-Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Time - ${sessionTimeMinutes} minutes (${config.sessionTime || "1 hour"}), Mode - ${config.campaignMode || "One-shot"}.
+Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Mode - ${config.campaignMode || "One-shot"}.
 Player character: Race - ${character.race || "Human"} (Traits: ${raceDetails}), Class - ${character.class || "Fighter"} (Features: ${classDetails}), Background - ${character.background || "Acolyte"}, Backstory - ${character.backstory || "A wandering hero"}.
-
-SESSION TIME MANAGEMENT: This is a ${sessionTimeMinutes}-minute session. ${pacingGuidance}
-- Track session progress and ensure the adventure fits within the time limit
-- Pace encounters, dialogue, and objectives according to the session length
-- Provide reminders about remaining time when appropriate
-- Focus on ${sessionTimeMinutes <= 30 ? "action and combat" : sessionTimeMinutes <= 60 ? "balanced exploration and encounters" : "deep exploration and roleplaying"}
 
 SESSION STORAGE: Players can save and export their progress at any time. Remind them of major milestones where saving would be beneficial (after completing major objectives, before difficult encounters, etc.).
 
@@ -211,16 +190,6 @@ IMPORTANT DM RULE: You NEVER roll dice for the player character. The player ALWA
 You may roll dice for NPCs, monsters, and environmental effects only. When describing outcomes, say things like "please roll your d20 + Strength modifier" or "make your initiative check now".
 
 ${rollAnalysis.needsRoll ? `ROLL REQUEST DETECTED: ${rollAnalysis.guidance}` : ""}
-
-RESPONSE QUALITY GUIDELINES:
-1. Be SPECIFIC with roll instructions: Include exact modifiers and DCs
-2. Create TENSION: Build anticipation before revealing outcomes
-3. Use SENSORY details: What does the player see, hear, smell, feel?
-4. Provide CHOICES: Always give 2-3 meaningful options for what to do next
-5. Track CONSEQUENCES: Reference previous actions and their effects
-6. Use THEME vocabulary: ${responseTemplates.vocabulary.join(", ")}
-
-${contextualHints}
 
 Respond narratively, guide the player through their rolls, describe outcomes based on their roll results, keep it engaging and true to 5e.
 Player's current action: ${playerAction}
@@ -420,193 +389,9 @@ async function queryAI(playerAction, config, character, history) {
   }
 }
 
-/**
- * Get pacing guidance based on session duration
- * @param {number} sessionTimeMinutes - Session length in minutes
- * @returns {string} Pacing guidance for the AI DM
- */
-function getPacingGuidance(sessionTimeMinutes) {
-  if (sessionTimeMinutes <= 15) {
-    return "This is an ULTRA-SHORT session! Focus on ONE main encounter or objective. Keep descriptions brief, limit side activities, and drive toward a quick resolution. Aim for 1-2 significant moments only.";
-  } else if (sessionTimeMinutes <= 30) {
-    return "This is a SHORT session! Focus on 1-2 encounters maximum. Be efficient with descriptions, prioritize action over extensive dialogue, and ensure clear objectives with quick resolutions.";
-  } else if (sessionTimeMinutes <= 60) {
-    return "This is a STANDARD session! Balance exploration and encounters appropriately. Allow some roleplaying and side objectives, but maintain good pacing to fit everything comfortably.";
-  } else if (sessionTimeMinutes <= 120) {
-    return "This is a LONG session! Allow deeper exploration, more complex encounters, extensive roleplaying opportunities, and multiple objectives with room for character development.";
-  } else {
-    return "This is an EXTENDED session! Provide rich world-building, complex multi-stage encounters, extensive character interactions, and deep narrative exploration with plenty of time for detailed roleplaying.";
-  }
-}
+// Removed pacing guidance function as it's no longer needed
 
-/**
- * Get thematic response templates based on game theme
- * @param {string} theme - The game theme
- * @returns {object} Theme-specific vocabulary and style guidelines
- */
-function getThematicResponseTemplates(theme) {
-  const templates = {
-    "Classic D&D": {
-      vocabulary: [
-        "tavern",
-        "quest",
-        "adventurer",
-        "dungeon",
-        "treasure",
-        "magical",
-        "ancient",
-      ],
-      tone: "epic fantasy adventure",
-      combatWords: ["blade", "spell", "armor", "shield", "arrow"],
-      locationWords: [
-        "chamber",
-        "corridor",
-        "throne room",
-        "crypt",
-        "forest glade",
-      ],
-    },
-    "Modern Zombies": {
-      vocabulary: [
-        "survivor",
-        "infected",
-        "supplies",
-        "safehouse",
-        "horde",
-        "outbreak",
-        "barricade",
-      ],
-      tone: "tense survival horror",
-      combatWords: ["bite", "scratch", "headshot", "melee weapon", "gunfire"],
-      locationWords: [
-        "abandoned building",
-        "street",
-        "rooftop",
-        "subway tunnel",
-        "pharmacy",
-      ],
-    },
-    "Star Wars": {
-      vocabulary: [
-        "Force",
-        "Empire",
-        "starship",
-        "blaster",
-        "credits",
-        "holocron",
-        "cantina",
-      ],
-      tone: "space opera adventure",
-      combatWords: [
-        "lightsaber",
-        "blaster bolt",
-        "deflect",
-        "Force push",
-        "thermal detonator",
-      ],
-      locationWords: [
-        "hangar bay",
-        "bridge",
-        "cantina",
-        "spaceport",
-        "asteroid field",
-      ],
-    },
-    "Post-Apocalyptic Wasteland": {
-      vocabulary: [
-        "radiation",
-        "scavenge",
-        "mutant",
-        "ruins",
-        "faction",
-        "wasteland",
-        "bunker",
-      ],
-      tone: "gritty survival",
-      combatWords: [
-        "makeshift weapon",
-        "ambush",
-        "radiation burn",
-        "mutant claw",
-        "scrap armor",
-      ],
-      locationWords: [
-        "ruined city",
-        "abandoned vault",
-        "trading post",
-        "irradiated zone",
-        "camp",
-      ],
-    },
-  };
-
-  return templates[theme] || templates["Classic D&D"];
-}
-
-/**
- * Generate contextual hints based on player action and game state
- * @param {string} playerAction - The player's current action
- * @param {object} character - Character object
- * @param {array} history - Recent conversation history
- * @returns {string} Contextual hints for the AI
- */
-function getContextualHints(playerAction, character, history) {
-  const hints = [];
-
-  // Check for low health situations
-  if (
-    character.currentHp &&
-    character.maxHp &&
-    character.currentHp / character.maxHp < 0.3
-  ) {
-    hints.push("Player is critically injured - emphasize danger and urgency");
-  }
-
-  // Check for repeated actions
-  const recentActions = history
-    .slice(-3)
-    .filter((msg) => !msg.isDM)
-    .map((msg) => msg.text);
-  if (
-    recentActions.length > 1 &&
-    recentActions.every((action) => action.includes("attack"))
-  ) {
-    hints.push(
-      "Player is focusing on combat - consider introducing complications or alternatives",
-    );
-  }
-
-  // Check for exploration keywords
-  if (
-    playerAction.toLowerCase().includes("look") ||
-    playerAction.toLowerCase().includes("search")
-  ) {
-    hints.push(
-      "Player is exploring - provide detailed sensory descriptions and hidden details",
-    );
-  }
-
-  // Check for social interaction
-  if (
-    playerAction.toLowerCase().includes("talk") ||
-    playerAction.toLowerCase().includes("persuade")
-  ) {
-    hints.push(
-      "Player is attempting social interaction - create memorable NPCs with distinct personalities",
-    );
-  }
-
-  return hints.length > 0 ? `CONTEXTUAL HINTS:\n${hints.join("\n")}` : "";
-}
-
-export {
-  queryAI,
-  testDMRollRule,
-  analyzeRollRequest,
-  getPacingGuidance,
-  getThematicResponseTemplates,
-  getContextualHints,
-};
+export { queryAI, testDMRollRule, analyzeRollRequest };
 
 // To add more providers, extend the queryAI function and update the Settings UI accordingly.
 // Use testDMRollRule() in development to verify DM roll rule implementation.

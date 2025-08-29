@@ -9,13 +9,10 @@ import {
   Platform,
   TouchableOpacity,
   ImageBackground,
-  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { rollD20 } from "../utils/diceRoller";
 import { queryAI } from "../utils/aiService";
-import rollHelper from "../utils/rollHelper";
 import { useTheme } from "../theme/ThemeProvider";
 import ErrorBoundary from "../components/ErrorBoundary";
 import {
@@ -28,12 +25,8 @@ import MapGrid from "../components/MapGrid";
 import MapPanel from "../components/panels/MapPanel";
 import DiceRollerPanel from "../components/panels/DiceRollerPanel";
 import InventoryPanel from "../components/panels/InventoryPanel";
+import QuickActionsPanel from "../components/panels/QuickActionsPanel";
 import { getShadowStyle, getTextStyle } from "../theme/themeUtils";
-import QuickActionBar from "../components/QuickActionBar";
-import { TutorialOverlay } from "../components/TutorialOverlay";
-import { SessionPacingManager } from "../utils/sessionPacing";
-import { AchievementSystem } from "../utils/achievementSystem";
-import sessionAnalytics from "../utils/sessionAnalytics";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -46,10 +39,8 @@ const RefinedGameSession = ({ navigation, route }) => {
   const [inputText, setInputText] = useState("");
   const [isContinuing, setIsContinuing] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-
-  // Tutorial state
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
+  const [quickActionsPanelVisible, setQuickActionsPanelVisible] =
+    useState(false);
 
   // Map and token management
   const [tokens, setTokens] = useState([]);
@@ -108,25 +99,9 @@ const RefinedGameSession = ({ navigation, route }) => {
     await saveSessionLog(logData);
   }, [messages, tokens, config, route.params?.character, theme?.key]);
 
-  // Initialize systems
-  const [pacingManager] = useState(
-    () => new SessionPacingManager(sessionMinutes),
-  );
-  const [achievementSystem] = useState(() => new AchievementSystem());
-
   // Load session on mount
   useEffect(() => {
     const loadSession = async () => {
-      // Initialize analytics
-      sessionAnalytics.startSession(`session_${Date.now()}`);
-
-      // Check if first time player
-      const hasPlayedBefore = await AsyncStorage.getItem("has_played_before");
-      if (!hasPlayedBefore) {
-        setShowTutorial(true);
-        await AsyncStorage.setItem("has_played_before", "true");
-      }
-
       if (route.params?.continueSession) {
         const log = await loadSessionLog();
         if (log) {
@@ -276,71 +251,35 @@ const RefinedGameSession = ({ navigation, route }) => {
   );
 
   // AI message handling with better error handling
-  const handleSubmit = async (actionData = null) => {
-    const actionText = actionData?.text || inputText;
-    if (!actionText.trim() && !inputText.trim()) return;
+  const handleSubmit = async () => {
+    if (!inputText.trim()) return;
 
     const config = route.params?.config || {};
     const character = route.params?.character || {};
 
-    // Track action in analytics
-    sessionAnalytics.trackAction({
-      type: actionData?.type || "custom",
-      text: actionText || inputText,
-      success: null,
-    });
-
     const newMessages = [
       ...messages,
-      { id: `${Date.now()}`, text: actionText || inputText, isDM: false },
+      { id: `${Date.now()}`, text: inputText, isDM: false },
     ];
     setMessages(newMessages);
-    if (!actionData) setInputText("");
+    setInputText("");
     setIsContinuing(true);
-
-    // Get contextual help for rolls if needed
-    const rollHelp = rollHelper.getContextualRollHelp(
-      actionText || inputText,
-      character,
-    );
 
     try {
       const aiResponse = await queryAI(
-        actionText,
+        inputText,
         config,
-        {
-          ...character,
-          lastAction: actionData?.type || "custom",
-          rollHelp: rollHelp,
-          context: actionData?.context || {},
-        },
+        character,
         messages.slice(-5),
       );
 
-      const responseMessage = {
+      newMessages.push({
         id: `${Date.now()}`,
         text: aiResponse,
         isDM: true,
         timestamp: Date.now(),
-        rollHelp: rollHelp,
-        quickAction: actionData?.quickAction,
-        actionType: actionData?.type,
-      };
-
-      newMessages.push(responseMessage);
+      });
       setMessages([...newMessages]);
-
-      // Check achievements
-      const unlockedAchievements = achievementSystem.checkAchievement(
-        "message_sent",
-        {
-          messageCount: newMessages.filter((m) => !m.isDM).length,
-        },
-      );
-
-      if (unlockedAchievements.length > 0) {
-        showAchievementNotification(unlockedAchievements[0]);
-      }
     } catch (error) {
       console.error("AI Error:", error);
       const errorMessage = {
@@ -420,41 +359,7 @@ const RefinedGameSession = ({ navigation, route }) => {
         },
       },
     ]);
-
-    // Track dice roll and get guidance
-    const rollContext = rollHelper.analyzeRollType("quick d20 roll");
-    const guidance = rollHelper.generateRollGuidance(
-      rollContext || { type: "general" },
-      { base: 0 },
-    );
-
-    sessionAnalytics.trackRoll({
-      label: "d20",
-      sides: 20,
-      count: 1,
-      rolls: [result],
-      total: result,
-      context: "quick_roll",
-      guidance: guidance,
-    });
-
-    // Check for critical achievements
-    const achievements = achievementSystem.checkAchievement("roll_result", {
-      roll: result,
-    });
-    if (achievements.length > 0) {
-      showAchievementNotification(achievements[0]);
-    }
   }, []);
-
-  // Achievement notification
-  const showAchievementNotification = (achievement) => {
-    Alert.alert(
-      "🏆 Achievement Unlocked!",
-      `${achievement.name}: ${achievement.description}`,
-      [{ text: "Awesome!", style: "default" }],
-    );
-  };
 
   // Enhanced message rendering
   const renderMessage = ({ item }) => (
@@ -470,7 +375,6 @@ const RefinedGameSession = ({ navigation, route }) => {
         },
       ]}
     >
-      {/* Main message */}
       <Text
         style={[
           styles.messageText,
@@ -483,39 +387,6 @@ const RefinedGameSession = ({ navigation, route }) => {
       >
         {item.text}
       </Text>
-
-      {/* Roll guidance if available */}
-      {item.rollHelp && (
-        <View style={styles.rollGuidance}>
-          <Text
-            style={[styles.rollFormula, { color: theme?.accent || "#7f9cf5" }]}
-          >
-            🎲 {item.rollHelp.rollFormula}
-          </Text>
-          {item.rollHelp.details?.map((detail, index) => (
-            <Text
-              key={index}
-              style={[styles.rollDetail, { color: theme?.text || "#eaeaea" }]}
-            >
-              {detail}
-            </Text>
-          ))}
-        </View>
-      )}
-
-      {/* Quick action indicator */}
-      {item.quickAction && (
-        <View style={styles.actionBadge}>
-          <Text
-            style={[
-              styles.actionBadgeText,
-              { color: theme?.buttonText || "#fff" },
-            ]}
-          >
-            {item.actionType || "Action"}
-          </Text>
-        </View>
-      )}
     </View>
   );
 
@@ -568,56 +439,8 @@ const RefinedGameSession = ({ navigation, route }) => {
         {/* Theme background */}
         {renderBackground()}
 
-<<<<<<< HEAD
-        {/* Tutorial overlay */}
-        {showTutorial && (
-          <TutorialOverlay
-            step={tutorialStep}
-            onNext={() => {
-              if (tutorialStep < 3) {
-                setTutorialStep(tutorialStep + 1);
-              } else {
-                setShowTutorial(false);
-              }
-            }}
-            onSkip={() => setShowTutorial(false)}
-          />
-        )}
-
-        {/* Enhanced timer display with session management */}
-        <View style={[styles.timerContainer, getShadowStyle(theme || {})]}>
-          <Text
-            style={[styles.timerText, { color: theme?.accent || "#7f9cf5" }]}
-          >
-            {sessionTimeInfo
-              ? `${sessionTimeInfo.timeRemainingMinutes}:${String(Math.floor(sessionTimeInfo.timeRemaining % 60)).padStart(2, "0")}`
-              : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
-          </Text>
-          <Text style={[styles.timerLabel, { color: theme?.text || "#fff" }]}>
-            Session Time
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.timerButton,
-              { backgroundColor: theme?.button || "#7f9cf5" },
-            ]}
-            onPress={() => setTimerActive(!timerActive)}
-          >
-            <Text
-              style={[
-                styles.timerButtonText,
-                { color: theme?.buttonText || "#fff" },
-              ]}
-            >
-              {timerActive ? "⏸️ Pause" : "▶️ Resume"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Session management buttons */}
-=======
         {/* Session management buttons */}
         <View style={styles.headerButtons}>
->>>>>>> f7db3fef9a0db943215555251a0189c8e91ec042
           <TouchableOpacity
             style={[
               styles.sessionButton,
@@ -645,48 +468,6 @@ const RefinedGameSession = ({ navigation, route }) => {
           contentContainerStyle={{ paddingBottom: 20 }}
         />
 
-<<<<<<< HEAD
-        {/* Quick Action Bar */}
-        <QuickActionBar
-          onAction={handleSubmit}
-          context={{ combatActive: false }}
-          theme={theme}
-          character={route.params?.character}
-          visible={!showTutorial}
-        />
-
-        {/* Session info and export options */}
-        {sessionTimeInfo && sessionTimeInfo.timeRemainingMinutes <= 5 && (
-          <View style={[styles.sessionAlert, getShadowStyle(theme || {})]}>
-            <Text
-              style={[
-                styles.sessionAlertText,
-                { color: theme?.accent || "#7f9cf5" },
-              ]}
-            >
-              ⏰ {sessionTimeInfo.timeRemainingMinutes} minute
-              {sessionTimeInfo.timeRemainingMinutes !== 1 ? "s" : ""} remaining!
-              Consider saving your progress.
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.quickSaveButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
-              ]}
-              onPress={() => handleSaveSession("json")}
-            >
-              <Text
-                style={[
-                  styles.quickSaveText,
-                  { color: theme?.buttonText || "#fff" },
-                ]}
-              >
-                Quick Save
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-=======
         {/* Session management options */}
         <TouchableOpacity
           style={[
@@ -704,7 +485,6 @@ const RefinedGameSession = ({ navigation, route }) => {
             Quick Save
           </Text>
         </TouchableOpacity>
->>>>>>> f7db3fef9a0db943215555251a0189c8e91ec042
 
         {/* Input area */}
         <View
@@ -750,15 +530,49 @@ const RefinedGameSession = ({ navigation, route }) => {
               {isContinuing ? "..." : "Send"}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.diceButton,
-              { backgroundColor: theme?.button || "#7f9cf5" },
-            ]}
-            onPress={handleRollD20}
-          >
-            <Text style={{ color: theme?.buttonText || "#fff" }}>d20</Text>
-          </TouchableOpacity>
+          {/* Quick Action Buttons */}
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme?.button || "#7f9cf5" },
+              ]}
+              onPress={() => setMapPanelVisible(true)}
+            >
+              <Text style={{ color: theme?.buttonText || "#fff" }}>Map</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme?.button || "#7f9cf5" },
+              ]}
+              onPress={() => setDicePanelVisible(true)}
+            >
+              <Text style={{ color: theme?.buttonText || "#fff" }}>Dice</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme?.button || "#7f9cf5" },
+              ]}
+              onPress={() => setInventoryPanelVisible(true)}
+            >
+              <Text style={{ color: theme?.buttonText || "#fff" }}>
+                Inventory
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme?.button || "#7f9cf5" },
+              ]}
+              onPress={() => setQuickActionsPanelVisible(true)}
+            >
+              <Text style={{ color: theme?.buttonText || "#fff" }}>
+                Actions
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Map Panel */}
@@ -965,46 +779,31 @@ const RefinedGameSession = ({ navigation, route }) => {
             ]);
           }}
         />
+
+        {/* Quick Actions Panel */}
+        <QuickActionsPanel
+          visible={quickActionsPanelVisible}
+          onClose={() => setQuickActionsPanelVisible(false)}
+          onOpen={() => setQuickActionsPanelVisible(true)}
+          theme={theme}
+          panelPosition="right"
+          anyPanelOpen={
+            mapPanelVisible ||
+            dicePanelVisible ||
+            inventoryPanelVisible ||
+            quickActionsPanelVisible
+          }
+          onAction={(actionText) => {
+            setInputText(actionText);
+            setQuickActionsPanelVisible(false);
+          }}
+        />
       </View>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  rollGuidance: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: "rgba(0,0,0,0.1)",
-    borderRadius: 8,
-  },
-  rollFormula: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  rollDetail: {
-    fontSize: 14,
-    opacity: 0.9,
-    marginLeft: 8,
-  },
-  actionBadge: {
-    position: "absolute",
-    top: -10,
-    right: -10,
-    backgroundColor: "#7f9cf5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  actionBadgeText: {
-    fontSize: 12,
-    fontWeight: "bold",
-  },
   keyboardContainer: {
     flex: 1,
   },
@@ -1068,11 +867,27 @@ const styles = StyleSheet.create({
     minWidth: 80,
     alignItems: "center",
   },
-  diceButton: {
+  actionButton: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     marginLeft: 8,
+    alignItems: "center",
+  },
+  actionButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginHorizontal: 8,
+    marginLeft: 12,
+  },
+  actionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 70,
   },
   mapContent: {
     flex: 1,

@@ -10,7 +10,7 @@ import {
   ImageBackground,
   TouchableOpacity,
 } from "react-native";
-
+import { rollD20 } from "../utils/diceRoller";
 import { queryAI } from "../utils/aiService";
 import { useTheme } from "../theme/ThemeProvider";
 import {
@@ -18,8 +18,6 @@ import {
   loadSessionLog,
   clearSessionLog,
 } from "../utils/sessionLog";
-import sessionState from "../utils/sessionState";
-import sessionTimer from "../utils/timer/sessionTimer";
 import MapGrid from "../components/MapGrid";
 import MapPanel from "../components/panels/MapPanel";
 import DiceRollerPanel from "../components/panels/DiceRollerPanel";
@@ -71,29 +69,11 @@ const GameSession = ({ navigation, route }) => {
     // { id: "1", name: "Short Sword", type: "Weapon", description: "A basic sword.", quantity: 1 }
   ]);
 
-<<<<<<< HEAD
-  // Session configuration
-  const config = route.params?.config || {};
-  const sessionMinutes = config.sessionTime || 30;
-
-  // Timer state
-  const [timeRemaining, setTimeRemaining] = useState(sessionMinutes * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [timerId, setTimerId] = useState(null);
-=======
   // Session config
   const config = route.params?.config || {};
->>>>>>> f7db3fef9a0db943215555251a0189c8e91ec042
 
   // Load session log on mount (or use initial config/character)
   React.useEffect(() => {
-    // Reset timer state when starting a new session
-    if (!route.params?.continueSession) {
-      setSecondsLeft(totalSeconds);
-      setTimerActive(true);
-      setTimerPacingStage(0);
-    }
-
     async function loadSession() {
       // If continuing, load session log
       if (route.params?.continueSession) {
@@ -120,68 +100,6 @@ const GameSession = ({ navigation, route }) => {
     // eslint-disable-next-line
   }, []);
 
-<<<<<<< HEAD
-  // Initialize and start timer
-  React.useEffect(() => {
-    const initTimer = async () => {
-      // Clear any previous session state
-      await sessionState.clearAllSessionState();
-
-      // Initialize new session
-      await sessionState.initializeSessionState(config);
-
-      // Reset timer state
-      setTimeRemaining(sessionMinutes * 60);
-      setIsRunning(true);
-
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          setIsRunning(false);
-          setMessages(prev => [...prev, {
-            id: `${prev.length + 1}`,
-            text: "⏰ Session time has ended! The DM will provide a final wrap-up.",
-            isDM: true
-          }]);
-          return 0;
-        }
-
-        // Check for milestone notifications
-        if (prev === Math.floor(sessionMinutes * 30)) { // 50% time remaining
-          setMessages(prev => [...prev, {
-            id: `${prev.length + 1}`,
-            text: "Half your session time has passed. Consider moving the story forward!",
-            isDM: true
-          }]);
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
-
-    setTimerId(timer);
-
-    // Cleanup on unmount
-    };
-
-    initTimer();
-
-    return () => {
-      if (timerId) {
-        clearInterval(timerId);
-        setTimerId(null);
-      }
-      setTimeRemaining(0);
-      setIsRunning(false);
-      sessionState.endSession();
-    };
-  }, [sessionMinutes, config]);
-    // eslint-disable-next-line
-  }, []);
-
-=======
->>>>>>> f7db3fef9a0db943215555251a0189c8e91ec042
   // Save session log after each message change
   React.useEffect(() => {
     async function saveLog() {
@@ -208,12 +126,6 @@ const GameSession = ({ navigation, route }) => {
     // Use config/character from route.params (for session log consistency)
     const config = route.params?.config || {};
     const character = route.params?.character || {};
-
-    // Get last message to check if it was a dice roll
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.isDiceRoll) {
-      return; // Don't process AI response for dice rolls
-    }
 
     // Add player message
     const newMessages = [
@@ -291,15 +203,9 @@ const GameSession = ({ navigation, route }) => {
   const handleRollD20 = (modifier = 0) => {
     const roll = rollD20(modifier);
     const rollMessage = `Dice Roll (d20 + ${modifier}): ${roll}`;
-    // Create new message with isDiceRoll flag to prevent AI response
     setMessages([
       ...messages,
-      {
-        id: `${messages.length + 1}`,
-        text: rollMessage,
-        isDM: false,
-        isDiceRoll: true,
-      },
+      { id: `${messages.length + 1}`, text: rollMessage, isDM: false },
     ]);
   };
 
@@ -349,15 +255,6 @@ const GameSession = ({ navigation, route }) => {
       keyboardVerticalOffset={80}
     >
       {backgroundElement}
-<<<<<<< HEAD
-      {/* Session Timer UI */}
-      <View style={styles.timerContainer}>
-        <Text style={[styles.timerText, { color: theme.accent }]}>
-          ⏳ Time Left: {String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:{String(timeRemaining % 60).padStart(2, '0')}
-        </Text>
-      </View>
-=======
->>>>>>> f7db3fef9a0db943215555251a0189c8e91ec042
       {/* MapPanel pop-out */}
       <MapPanel
         visible={mapPanelVisible}
@@ -748,6 +645,14 @@ const GameSession = ({ navigation, route }) => {
         >
           <Text style={[styles.buttonText, { color: theme.buttonText }]}>
             Submit
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: theme.button }]}
+          onPress={() => handleRollD20(0)}
+        >
+          <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+            Roll d20
           </Text>
         </TouchableOpacity>
       </View>
