@@ -22,6 +22,11 @@ const themesList = [
   "Custom",
 ];
 const difficulties = ["Easy", "Medium", "Hard"];
+const sessionTimes = [
+  { label: "10 minutes", value: 10 },
+  { label: "30 minutes", value: 30 },
+  { label: "1 hour", value: 60 },
+];
 const campaignModes = ["One-shot", "Ongoing"];
 
 const SessionSetup = ({ navigation }) => {
@@ -30,6 +35,9 @@ const SessionSetup = ({ navigation }) => {
   const [selectedTheme, setSelectedTheme] = useState(themesList[0]);
   const [customTheme, setCustomTheme] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[1]);
+  const [selectedSessionTime, setSelectedSessionTime] = useState(
+    sessionTimes[1].value,
+  );
   const [selectedCampaignMode, setSelectedCampaignMode] = useState(
     campaignModes[0],
   );
@@ -54,6 +62,7 @@ const SessionSetup = ({ navigation }) => {
         isAIDM,
         theme: selectedTheme === "Custom" ? customTheme : selectedTheme,
         difficulty: selectedDifficulty,
+        sessionTime: selectedSessionTime, // now a number (minutes)
         campaignMode: selectedCampaignMode,
       };
       navigation.navigate("CharacterCreation", { config });
@@ -172,6 +181,25 @@ const SessionSetup = ({ navigation }) => {
       >
         {difficulties.map((diff) => (
           <Picker.Item key={diff} label={diff} value={diff} />
+        ))}
+      </Picker>
+
+      <Text style={[styles.label, { color: theme.text }]}>Session Time:</Text>
+      <Picker
+        selectedValue={selectedSessionTime}
+        onValueChange={(itemValue) => setSelectedSessionTime(itemValue)}
+        style={[
+          styles.picker,
+          {
+            color: theme.text,
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+          },
+        ]}
+        dropdownIconColor={theme.accent}
+      >
+        {sessionTimes.map((time) => (
+          <Picker.Item key={time.value} label={time.label} value={time.value} />
         ))}
       </Picker>
 
