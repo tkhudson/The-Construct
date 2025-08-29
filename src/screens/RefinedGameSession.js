@@ -9,10 +9,13 @@ import {
   Platform,
   TouchableOpacity,
   ImageBackground,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { rollD20 } from "../utils/diceRoller";
 import { queryAI } from "../utils/aiService";
+import rollHelper from "../utils/rollHelper";
 import { useTheme } from "../theme/ThemeProvider";
 import ErrorBoundary from "../components/ErrorBoundary";
 import {
@@ -26,6 +29,11 @@ import MapPanel from "../components/panels/MapPanel";
 import DiceRollerPanel from "../components/panels/DiceRollerPanel";
 import InventoryPanel from "../components/panels/InventoryPanel";
 import { getShadowStyle, getTextStyle } from "../theme/themeUtils";
+import QuickActionBar from "../components/QuickActionBar";
+import { TutorialOverlay } from "../components/TutorialOverlay";
+import { SessionPacingManager } from "../utils/sessionPacing";
+import { AchievementSystem } from "../utils/achievementSystem";
+import sessionAnalytics from "../utils/sessionAnalytics";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -38,6 +46,10 @@ const RefinedGameSession = ({ navigation, route }) => {
   const [inputText, setInputText] = useState("");
   const [isContinuing, setIsContinuing] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+
+  // Tutorial state
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   // Map and token management
   const [tokens, setTokens] = useState([]);
@@ -102,9 +114,25 @@ const RefinedGameSession = ({ navigation, route }) => {
     await saveSessionLog(logData);
   }, [messages, tokens, config, route.params?.character, theme?.key]);
 
+  // Initialize systems
+  const [pacingManager] = useState(
+    () => new SessionPacingManager(sessionMinutes),
+  );
+  const [achievementSystem] = useState(() => new AchievementSystem());
+
   // Load session on mount
   useEffect(() => {
     const loadSession = async () => {
+      // Initialize analytics
+      sessionAnalytics.startSession(`session_${Date.now()}`);
+
+      // Check if first time player
+      const hasPlayedBefore = await AsyncStorage.getItem("has_played_before");
+      if (!hasPlayedBefore) {
+        setShowTutorial(true);
+        await AsyncStorage.setItem("has_played_before", "true");
+      }
+
       if (route.params?.continueSession) {
         const log = await loadSessionLog();
         if (log) {
@@ -289,35 +317,71 @@ const RefinedGameSession = ({ navigation, route }) => {
   }, [timerActive, sessionLoaded]);
 
   // AI message handling with better error handling
-  const handleSubmit = async () => {
-    if (!inputText.trim()) return;
+  const handleSubmit = async (actionData = null) => {
+    const actionText = actionData?.text || inputText;
+    if (!actionText.trim() && !inputText.trim()) return;
 
     const config = route.params?.config || {};
     const character = route.params?.character || {};
 
+    // Track action in analytics
+    sessionAnalytics.trackAction({
+      type: actionData?.type || "custom",
+      text: actionText || inputText,
+      success: null,
+    });
+
     const newMessages = [
       ...messages,
-      { id: `${Date.now()}`, text: inputText, isDM: false },
+      { id: `${Date.now()}`, text: actionText || inputText, isDM: false },
     ];
     setMessages(newMessages);
-    setInputText("");
+    if (!actionData) setInputText("");
     setIsContinuing(true);
+
+    // Get contextual help for rolls if needed
+    const rollHelp = rollHelper.getContextualRollHelp(
+      actionText || inputText,
+      character,
+    );
 
     try {
       const aiResponse = await queryAI(
-        inputText,
+        actionText,
         config,
-        character,
+        {
+          ...character,
+          lastAction: actionData?.type || "custom",
+          rollHelp: rollHelp,
+          context: actionData?.context || {},
+        },
         messages.slice(-5),
       );
 
-      newMessages.push({
+      const responseMessage = {
         id: `${Date.now()}`,
         text: aiResponse,
         isDM: true,
         timestamp: Date.now(),
-      });
+        rollHelp: rollHelp,
+        quickAction: actionData?.quickAction,
+        actionType: actionData?.type,
+      };
+
+      newMessages.push(responseMessage);
       setMessages([...newMessages]);
+
+      // Check achievements
+      const unlockedAchievements = achievementSystem.checkAchievement(
+        "message_sent",
+        {
+          messageCount: newMessages.filter((m) => !m.isDM).length,
+        },
+      );
+
+      if (unlockedAchievements.length > 0) {
+        showAchievementNotification(unlockedAchievements[0]);
+      }
     } catch (error) {
       console.error("AI Error:", error);
       const errorMessage = {
@@ -397,7 +461,41 @@ const RefinedGameSession = ({ navigation, route }) => {
         },
       },
     ]);
+
+    // Track dice roll and get guidance
+    const rollContext = rollHelper.analyzeRollType("quick d20 roll");
+    const guidance = rollHelper.generateRollGuidance(
+      rollContext || { type: "general" },
+      { base: 0 },
+    );
+
+    sessionAnalytics.trackRoll({
+      label: "d20",
+      sides: 20,
+      count: 1,
+      rolls: [result],
+      total: result,
+      context: "quick_roll",
+      guidance: guidance,
+    });
+
+    // Check for critical achievements
+    const achievements = achievementSystem.checkAchievement("roll_result", {
+      roll: result,
+    });
+    if (achievements.length > 0) {
+      showAchievementNotification(achievements[0]);
+    }
   }, []);
+
+  // Achievement notification
+  const showAchievementNotification = (achievement) => {
+    Alert.alert(
+      "🏆 Achievement Unlocked!",
+      `${achievement.name}: ${achievement.description}`,
+      [{ text: "Awesome!", style: "default" }],
+    );
+  };
 
   // Enhanced message rendering
   const renderMessage = ({ item }) => (
@@ -413,6 +511,7 @@ const RefinedGameSession = ({ navigation, route }) => {
         },
       ]}
     >
+      {/* Main message */}
       <Text
         style={[
           styles.messageText,
@@ -425,6 +524,39 @@ const RefinedGameSession = ({ navigation, route }) => {
       >
         {item.text}
       </Text>
+
+      {/* Roll guidance if available */}
+      {item.rollHelp && (
+        <View style={styles.rollGuidance}>
+          <Text
+            style={[styles.rollFormula, { color: theme?.accent || "#7f9cf5" }]}
+          >
+            🎲 {item.rollHelp.rollFormula}
+          </Text>
+          {item.rollHelp.details?.map((detail, index) => (
+            <Text
+              key={index}
+              style={[styles.rollDetail, { color: theme?.text || "#eaeaea" }]}
+            >
+              {detail}
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {/* Quick action indicator */}
+      {item.quickAction && (
+        <View style={styles.actionBadge}>
+          <Text
+            style={[
+              styles.actionBadgeText,
+              { color: theme?.buttonText || "#fff" },
+            ]}
+          >
+            {item.actionType || "Action"}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -476,6 +608,21 @@ const RefinedGameSession = ({ navigation, route }) => {
       <View style={styles.container}>
         {/* Theme background */}
         {renderBackground()}
+
+        {/* Tutorial overlay */}
+        {showTutorial && (
+          <TutorialOverlay
+            step={tutorialStep}
+            onNext={() => {
+              if (tutorialStep < 3) {
+                setTutorialStep(tutorialStep + 1);
+              } else {
+                setShowTutorial(false);
+              }
+            }}
+            onSkip={() => setShowTutorial(false)}
+          />
+        )}
 
         {/* Enhanced timer display with session management */}
         <View style={[styles.timerContainer, getShadowStyle(theme || {})]}>
@@ -532,6 +679,15 @@ const RefinedGameSession = ({ navigation, route }) => {
           keyExtractor={(item) => item.id}
           style={styles.chatList}
           contentContainerStyle={{ paddingBottom: 20 }}
+        />
+
+        {/* Quick Action Bar */}
+        <QuickActionBar
+          onAction={handleSubmit}
+          context={{ combatActive: false }}
+          theme={theme}
+          character={route.params?.character}
+          visible={!showTutorial}
         />
 
         {/* Session info and export options */}
@@ -831,6 +987,40 @@ const RefinedGameSession = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  rollGuidance: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderRadius: 8,
+  },
+  rollFormula: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  rollDetail: {
+    fontSize: 14,
+    opacity: 0.9,
+    marginLeft: 8,
+  },
+  actionBadge: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    backgroundColor: "#7f9cf5",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  actionBadgeText: {
+    fontSize: 12,
+    fontWeight: "bold",
+  },
   keyboardContainer: {
     flex: 1,
   },
