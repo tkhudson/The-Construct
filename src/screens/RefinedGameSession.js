@@ -56,7 +56,6 @@ const RefinedGameSession = ({ navigation, route }) => {
   // Session management
   const [sessionId, setSessionId] = useState(null);
   const [sessionStats, setSessionStats] = useState(null);
-  const [sessionTimeInfo, setSessionTimeInfo] = useState(null);
   const [sessionExports, setSessionExports] = useState(0);
 
   // Enhanced inventory with better structure
@@ -81,13 +80,8 @@ const RefinedGameSession = ({ navigation, route }) => {
     },
   ]);
 
-  // Session timer with enhanced features
+  // Session configuration
   const config = route.params?.config || {};
-  const sessionMinutes = config.sessionTime || 30;
-  const [secondsLeft, setSecondsLeft] = useState(sessionMinutes * 60);
-  const [timerActive, setTimerActive] = useState(true);
-  const [timerInterval, setTimerInterval] = useState(null);
-  const [timerPacingStage, setTimerPacingStage] = useState(0);
 
   // Enhanced session management
   const saveLog = useCallback(async () => {
@@ -125,9 +119,9 @@ const RefinedGameSession = ({ navigation, route }) => {
 
     loadSession();
     return () => {
-      if (timerInterval) clearInterval(timerInterval);
+      // Cleanup
     };
-  }, [route.params, setThemeKey, timerInterval]);
+  }, [route.params, setThemeKey]);
 
   // Initialize theme from route params
   useEffect(() => {
@@ -165,28 +159,12 @@ const RefinedGameSession = ({ navigation, route }) => {
     }
   }, [sessionId]);
 
-  // Update session time info periodically
+  // Session management
   useEffect(() => {
-    const updateTimeInfo = () => {
-      const sessionTime = route.params?.config?.sessionTime || 60;
-      const timeRemaining = Math.max(
-        0,
-        sessionTime * 60 - (Math.floor(Date.now() / 1000) % (sessionTime * 60)),
-      );
-
-      setSessionTimeInfo({
-        timeLimit: sessionTime,
-        timeRemaining: timeRemaining,
-        timeRemainingMinutes: Math.floor(timeRemaining / 60),
-        sessionProgress: 0, // Will be updated with actual progress
-        warnings: [],
-      });
+    return () => {
+      // Cleanup when component unmounts
     };
-
-    updateTimeInfo();
-    const interval = setInterval(updateTimeInfo, 1000);
-    return () => clearInterval(interval);
-  }, [route.params?.config?.sessionTime]);
+  }, []);
 
   // Auto-save session data
   useEffect(() => {
@@ -268,25 +246,6 @@ const RefinedGameSession = ({ navigation, route }) => {
     },
     [sessionId, messages, tokens, sessionStats],
   );
-
-  // Enhanced timer logic
-  useEffect(() => {
-    if (!timerActive || !sessionLoaded) return;
-
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 0) {
-          setTimerActive(false);
-          setTimerPacingStage(4);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    setTimerInterval(interval);
-    return () => clearInterval(interval);
-  }, [timerActive, sessionLoaded]);
 
   // AI message handling with better error handling
   const handleSubmit = async () => {
@@ -477,36 +436,8 @@ const RefinedGameSession = ({ navigation, route }) => {
         {/* Theme background */}
         {renderBackground()}
 
-        {/* Enhanced timer display with session management */}
-        <View style={[styles.timerContainer, getShadowStyle(theme || {})]}>
-          <Text
-            style={[styles.timerText, { color: theme?.accent || "#7f9cf5" }]}
-          >
-            {sessionTimeInfo
-              ? `${sessionTimeInfo.timeRemainingMinutes}:${String(Math.floor(sessionTimeInfo.timeRemaining % 60)).padStart(2, "0")}`
-              : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
-          </Text>
-          <Text style={[styles.timerLabel, { color: theme?.text || "#fff" }]}>
-            Session Time
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.timerButton,
-              { backgroundColor: theme?.button || "#7f9cf5" },
-            ]}
-            onPress={() => setTimerActive(!timerActive)}
-          >
-            <Text
-              style={[
-                styles.timerButtonText,
-                { color: theme?.buttonText || "#fff" },
-              ]}
-            >
-              {timerActive ? "⏸️ Pause" : "▶️ Resume"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Session management buttons */}
+        {/* Session management buttons */}
+        <View style={styles.headerButtons}>
           <TouchableOpacity
             style={[
               styles.sessionButton,
@@ -534,37 +465,23 @@ const RefinedGameSession = ({ navigation, route }) => {
           contentContainerStyle={{ paddingBottom: 20 }}
         />
 
-        {/* Session info and export options */}
-        {sessionTimeInfo && sessionTimeInfo.timeRemainingMinutes <= 5 && (
-          <View style={[styles.sessionAlert, getShadowStyle(theme || {})]}>
-            <Text
-              style={[
-                styles.sessionAlertText,
-                { color: theme?.accent || "#7f9cf5" },
-              ]}
-            >
-              ⏰ {sessionTimeInfo.timeRemainingMinutes} minute
-              {sessionTimeInfo.timeRemainingMinutes !== 1 ? "s" : ""} remaining!
-              Consider saving your progress.
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.quickSaveButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
-              ]}
-              onPress={() => handleSaveSession("json")}
-            >
-              <Text
-                style={[
-                  styles.quickSaveText,
-                  { color: theme?.buttonText || "#fff" },
-                ]}
-              >
-                Quick Save
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Session management options */}
+        <TouchableOpacity
+          style={[
+            styles.quickSaveButton,
+            { backgroundColor: theme?.button || "#7f9cf5" },
+          ]}
+          onPress={() => handleSaveSession("json")}
+        >
+          <Text
+            style={[
+              styles.quickSaveText,
+              { color: theme?.buttonText || "#fff" },
+            ]}
+          >
+            Quick Save
+          </Text>
+        </TouchableOpacity>
 
         {/* Input area */}
         <View
@@ -846,33 +763,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: -2,
   },
-  timerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    marginBottom: 8,
-  },
-  timerText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    letterSpacing: 1,
-  },
-  timerLabel: {
-    fontSize: 14,
-    marginTop: 2,
-    textAlign: "center",
-    opacity: 0.8,
-  },
-  timerButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  timerButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
+
   sessionButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
