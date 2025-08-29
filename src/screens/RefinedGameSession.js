@@ -20,6 +20,7 @@ import {
   loadSessionLog,
   clearSessionLog,
 } from "../utils/sessionLog";
+// Session management using local state - sessionManager removed to avoid circular imports
 import MapGrid from "../components/MapGrid";
 import MapPanel from "../components/panels/MapPanel";
 import DiceRollerPanel from "../components/panels/DiceRollerPanel";
@@ -51,6 +52,12 @@ const RefinedGameSession = ({ navigation, route }) => {
   const [mapPanelVisible, setMapPanelVisible] = useState(false);
   const [dicePanelVisible, setDicePanelVisible] = useState(false);
   const [inventoryPanelVisible, setInventoryPanelVisible] = useState(false);
+
+  // Session management
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionStats, setSessionStats] = useState(null);
+  const [sessionTimeInfo, setSessionTimeInfo] = useState(null);
+  const [sessionExports, setSessionExports] = useState(0);
 
   // Enhanced inventory with better structure
   const [inventory, setInventory] = useState([
@@ -126,16 +133,141 @@ const RefinedGameSession = ({ navigation, route }) => {
   useEffect(() => {
     const config = route.params?.config || {};
     if (config.theme) {
+      console.log("[GameSession] Setting theme:", config.theme);
       setThemeKey(config.theme);
     }
   }, [route.params?.config?.theme, setThemeKey]);
-
-  // Auto-save session
+  // Initialize session with basic state management
   useEffect(() => {
-    if (sessionLoaded) {
-      saveLog();
+    const initializeSession = () => {
+      try {
+        // Generate session ID
+        const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        setSessionId(newSessionId);
+
+        // Initialize session stats
+        setSessionStats({
+          totalPlayTime: 0,
+          encountersCompleted: 0,
+          xpEarned: 0,
+          locationsVisited: 0,
+          levelsGained: 0,
+        });
+
+        console.log("[GameSession] Session initialized:", newSessionId);
+      } catch (error) {
+        console.error("[GameSession] Session initialization error:", error);
+      }
+    };
+
+    if (!sessionId) {
+      initializeSession();
     }
-  }, [messages, tokens, sessionLoaded, saveLog]);
+  }, [sessionId]);
+
+  // Update session time info periodically
+  useEffect(() => {
+    const updateTimeInfo = () => {
+      const sessionTime = route.params?.config?.sessionTime || 60;
+      const timeRemaining = Math.max(
+        0,
+        sessionTime * 60 - (Math.floor(Date.now() / 1000) % (sessionTime * 60)),
+      );
+
+      setSessionTimeInfo({
+        timeLimit: sessionTime,
+        timeRemaining: timeRemaining,
+        timeRemainingMinutes: Math.floor(timeRemaining / 60),
+        sessionProgress: 0, // Will be updated with actual progress
+        warnings: [],
+      });
+    };
+
+    updateTimeInfo();
+    const interval = setInterval(updateTimeInfo, 1000);
+    return () => clearInterval(interval);
+  }, [route.params?.config?.sessionTime]);
+
+  // Auto-save session data
+  useEffect(() => {
+    if (sessionId) {
+      const autoSave = async () => {
+        try {
+          // Save session data using existing session log system
+          const sessionData = {
+            id: sessionId,
+            messages,
+            tokens,
+            character: route.params?.character || {},
+            config: route.params?.config || {},
+            lastModified: Date.now(),
+            conversationHistory: messages,
+            totalPlayTime: Math.floor(Date.now() / 1000 / 60), // Simple play time calculation
+          };
+
+          // Store in AsyncStorage for persistence
+          const AsyncStorage =
+            require("@react-native-async-storage/async-storage").default;
+          await AsyncStorage.setItem(
+            `the_construct_session_${sessionId}`,
+            JSON.stringify(sessionData),
+          );
+
+          console.log("[GameSession] Session auto-saved");
+        } catch (error) {
+          console.error("[GameSession] Auto-save error:", error);
+        }
+      };
+
+      autoSave();
+    }
+  }, [messages, tokens, sessionId]);
+
+  // Handle manual save with export option
+  const handleSaveSession = useCallback(
+    async (format = "json") => {
+      try {
+        if (!sessionId) {
+          console.warn("[GameSession] No active session to save");
+          return;
+        }
+
+        const sessionData = {
+          id: sessionId,
+          messages,
+          tokens,
+          character: route.params?.character || {},
+          config: route.params?.config || {},
+          exportedAt: Date.now(),
+          format,
+          conversationHistory: messages,
+          sessionStats: sessionStats,
+        };
+
+        // For now, save to AsyncStorage and log
+        const AsyncStorage =
+          require("@react-native-async-storage/async-storage").default;
+        await AsyncStorage.setItem(
+          `the_construct_export_${sessionId}`,
+          JSON.stringify(sessionData),
+        );
+
+        setSessionExports((prev) => prev + 1);
+        console.log(
+          `[GameSession] Session exported as ${format}:`,
+          sessionData,
+        );
+
+        // Basic console export for testing
+        if (format === "json") {
+          console.log("Session JSON:", JSON.stringify(sessionData, null, 2));
+        }
+      } catch (error) {
+        console.error("[GameSession] Save error:", error);
+      }
+    },
+    [sessionId, messages, tokens, sessionStats],
+  );
 
   // Enhanced timer logic
   useEffect(() => {
@@ -345,13 +477,14 @@ const RefinedGameSession = ({ navigation, route }) => {
         {/* Theme background */}
         {renderBackground()}
 
-        {/* Enhanced timer display */}
+        {/* Enhanced timer display with session management */}
         <View style={[styles.timerContainer, getShadowStyle(theme || {})]}>
           <Text
             style={[styles.timerText, { color: theme?.accent || "#7f9cf5" }]}
           >
-            {Math.floor(secondsLeft / 60)}:
-            {String(secondsLeft % 60).padStart(2, "0")}
+            {sessionTimeInfo
+              ? `${sessionTimeInfo.timeRemainingMinutes}:${String(Math.floor(sessionTimeInfo.timeRemaining % 60)).padStart(2, "0")}`
+              : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
           </Text>
           <Text style={[styles.timerLabel, { color: theme?.text || "#fff" }]}>
             Session Time
@@ -372,6 +505,24 @@ const RefinedGameSession = ({ navigation, route }) => {
               {timerActive ? "⏸️ Pause" : "▶️ Resume"}
             </Text>
           </TouchableOpacity>
+
+          {/* Session management buttons */}
+          <TouchableOpacity
+            style={[
+              styles.sessionButton,
+              { backgroundColor: theme?.button || "#7f9cf5" },
+            ]}
+            onPress={() => handleSaveSession("json")}
+          >
+            <Text
+              style={[
+                styles.sessionButtonText,
+                { color: theme?.buttonText || "#fff" },
+              ]}
+            >
+              💾 Save ({sessionExports})
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Messages */}
@@ -382,6 +533,38 @@ const RefinedGameSession = ({ navigation, route }) => {
           style={styles.chatList}
           contentContainerStyle={{ paddingBottom: 20 }}
         />
+
+        {/* Session info and export options */}
+        {sessionTimeInfo && sessionTimeInfo.timeRemainingMinutes <= 5 && (
+          <View style={[styles.sessionAlert, getShadowStyle(theme || {})]}>
+            <Text
+              style={[
+                styles.sessionAlertText,
+                { color: theme?.accent || "#7f9cf5" },
+              ]}
+            >
+              ⏰ {sessionTimeInfo.timeRemainingMinutes} minute
+              {sessionTimeInfo.timeRemainingMinutes !== 1 ? "s" : ""} remaining!
+              Consider saving your progress.
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.quickSaveButton,
+                { backgroundColor: theme?.button || "#7f9cf5" },
+              ]}
+              onPress={() => handleSaveSession("json")}
+            >
+              <Text
+                style={[
+                  styles.quickSaveText,
+                  { color: theme?.buttonText || "#fff" },
+                ]}
+              >
+                Quick Save
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Input area */}
         <View
@@ -573,7 +756,8 @@ const RefinedGameSession = ({ navigation, route }) => {
           visible={dicePanelVisible}
           onClose={() => setDicePanelVisible(false)}
           onOpen={() => setDicePanelVisible(true)}
-          onRoll={(result) => {
+          onRoll={async (result) => {
+            // Add roll to conversation
             setMessages((prev) => [
               ...prev,
               {
@@ -584,6 +768,13 @@ const RefinedGameSession = ({ navigation, route }) => {
                 dice: result,
               },
             ]);
+
+            // Update session stats with roll count
+            setSessionStats((prev) => ({
+              ...prev,
+              rollCount: (prev.rollCount || 0) + 1,
+              lastRoll: result,
+            }));
           }}
           theme={theme || {}}
           panelPosition="right"
@@ -680,6 +871,16 @@ const styles = StyleSheet.create({
   },
   timerButtonText: {
     fontSize: 14,
+    fontWeight: "600",
+  },
+  sessionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  sessionButtonText: {
+    fontSize: 12,
     fontWeight: "600",
   },
   chatList: {
@@ -784,6 +985,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     marginHorizontal: 4,
+  },
+  sessionAlert: {
+    backgroundColor: "rgba(127, 156, 245, 0.1)",
+    borderColor: "#7f9cf5",
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sessionAlertText: {
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  quickSaveButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  quickSaveText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
 

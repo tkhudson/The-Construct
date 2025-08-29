@@ -12,17 +12,113 @@ import fiveEData from "../data/5eData.json";
  * Add new providers by extending the queryAI function and updating the Settings UI.
  */
 
+/**
+ * Helper function to detect player roll requests and provide proper guidance
+ * @param {string} playerAction - The player's input
+ * @returns {Object} - {needsRoll: boolean, guidance: string|null}
+ */
+function analyzeRollRequest(playerAction) {
+  const lowerAction = playerAction.toLowerCase();
+
+  // Common roll-related keywords and patterns
+  const rollKeywords = [
+    "roll",
+    "dice",
+    "check",
+    "saving throw",
+    "initiative",
+    "attack",
+    "cast",
+    "spell",
+    "concentration",
+    "death save",
+  ];
+
+  const containsRollKeyword = rollKeywords.some((keyword) =>
+    lowerAction.includes(keyword),
+  );
+
+  if (!containsRollKeyword) {
+    return { needsRoll: false, guidance: null };
+  }
+
+  // Detect specific types of rolls
+  if (lowerAction.includes("saving throw") || lowerAction.includes("save")) {
+    return {
+      needsRoll: true,
+      guidance:
+        "Please make your saving throw. Roll a d20 and add the appropriate ability modifier (e.g., for a Wisdom saving throw, add your Wisdom modifier). Tell me the result and I'll determine the outcome.",
+    };
+  }
+
+  if (lowerAction.includes("initiative")) {
+    return {
+      needsRoll: true,
+      guidance:
+        "Please roll for initiative. Roll a d20 and add your Dexterity modifier. I'll use this to determine turn order in combat.",
+    };
+  }
+
+  if (lowerAction.includes("attack")) {
+    return {
+      needsRoll: true,
+      guidance:
+        "For your attack, roll a d20 and add your attack modifier (Strength or Dexterity + proficiency bonus if applicable). If it's a spell attack, use your spellcasting ability modifier instead.",
+    };
+  }
+
+  if (lowerAction.includes("spell") || lowerAction.includes("cast")) {
+    return {
+      needsRoll: true,
+      guidance:
+        "For spellcasting, I need to know what you're casting. Some spells require attack rolls or saving throws. Please roll your d20 + spellcasting modifier and tell me the result.",
+    };
+  }
+
+  if (lowerAction.includes("concentration")) {
+    return {
+      needsRoll: true,
+      guidance:
+        "For concentration, roll a d20 and add your Constitution modifier. You need a 10 or higher to maintain concentration.",
+    };
+  }
+
+  if (
+    lowerAction.includes("death save") ||
+    lowerAction.includes("death saving")
+  ) {
+    return {
+      needsRoll: true,
+      guidance:
+        "For death saving throws, roll a d20. A result of 10 or higher is a success, 1-9 is a failure, and a 1 is two failures (critical fail).",
+    };
+  }
+
+  // Generic roll guidance
+  return {
+    needsRoll: true,
+    guidance:
+      "I see you want to make a roll! As your DM, I never roll dice for you. Please roll your d20 and add the appropriate modifier from your character sheet, then tell me the result. I'll then describe what happens next.",
+  };
+}
+
 // Basic stub response function (fallback if no API key or error)
 function generateStubResponse(playerAction, config, character, history) {
-  // Simple logic similar to previous stub
-  if (
-    playerAction.toLowerCase().includes("roll") ||
-    playerAction.toLowerCase().includes("check")
-  ) {
-    const roll = Math.floor(Math.random() * 20) + 1; // Simplified d20 roll
-    return `You attempt the action in the ${config.theme || "fantasy"} world... Roll result: ${roll}. ${roll >= 10 ? "Success!" : "Failure!"}`;
+  // Use the helper function to analyze roll requests
+  const rollAnalysis = analyzeRollRequest(playerAction);
+
+  if (rollAnalysis.needsRoll) {
+    return rollAnalysis.guidance;
   }
-  return `The DM narrates: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
+
+  // Add session time awareness to stub responses
+  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
+  const timeNote =
+    sessionTimeMinutes <= 30
+      ? " (keeping things quick for your short session!)"
+      : "";
+
+  return `The DM narrates${timeNote}: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
 }
 
 // Function to retrieve stored AI settings (cross-platform: SecureStore for native, AsyncStorage for web)
@@ -79,10 +175,25 @@ function buildPrompt(
     .map((s) => `${s.name} (Level ${s.level}, ${s.school}): ${s.description}`)
     .join("; ");
 
+  // Analyze the player's action for roll requests
+  const rollAnalysis = analyzeRollRequest(playerAction);
+
+  // Session time management and pacing guidance
+  const sessionTimeMinutes = parseInt(config.sessionTime) || 60;
+  const pacingGuidance = getPacingGuidance(sessionTimeMinutes);
+
   const systemMessage = `
 You are an AI Dungeon Master for a D&D 5e game. Adhere to 5e rules: character stats (e.g., Strength, Dexterity), classes (${character.class || "Fighter"}), races (${character.race || "Human"}), skills, spells, combat (initiative, attack rolls, saving throws).
-Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Time - ${config.sessionTime || "1 hour"}, Mode - ${config.campaignMode || "One-shot"}.
+Session details: Theme - ${config.theme || "Classic Fantasy"}, Difficulty - ${config.difficulty || "Medium"}, Time - ${sessionTimeMinutes} minutes (${config.sessionTime || "1 hour"}), Mode - ${config.campaignMode || "One-shot"}.
 Player character: Race - ${character.race || "Human"} (Traits: ${raceDetails}), Class - ${character.class || "Fighter"} (Features: ${classDetails}), Background - ${character.background || "Acolyte"}, Backstory - ${character.backstory || "A wandering hero"}.
+
+SESSION TIME MANAGEMENT: This is a ${sessionTimeMinutes}-minute session. ${pacingGuidance}
+- Track session progress and ensure the adventure fits within the time limit
+- Pace encounters, dialogue, and objectives according to the session length
+- Provide reminders about remaining time when appropriate
+- Focus on ${sessionTimeMinutes <= 30 ? "action and combat" : sessionTimeMinutes <= 60 ? "balanced exploration and encounters" : "deep exploration and roleplaying"}
+
+SESSION STORAGE: Players can save and export their progress at any time. Remind them of major milestones where saving would be beneficial (after completing major objectives, before difficult encounters, etc.).
 
 Relevant skills: ${skillDetails || "None mentioned"}.
 Relevant spells: ${spellDetails || "None mentioned"}.
@@ -91,7 +202,13 @@ Conversation history: ${history.map((msg) => `${msg.isDM ? "DM" : "Player"}: ${m
 
 ALWAYS keep your response concise and ensure it fits within the allowed token limit (${maxTokens}). Summarize or list only the most important details if needed. If the user asks for a list or inventory, only include the most essential items and avoid excessive detail. If you cannot fit everything, say so and offer to continue if needed.
 
-Respond narratively, resolve actions (e.g., roll virtual dice if needed, describe outcomes based on 5e rules), keep it engaging and true to 5e.
+IMPORTANT DM RULE: You NEVER roll dice for the player character. The player ALWAYS rolls their own dice (attack rolls, ability checks, saving throws, initiative, damage, etc.). When a player needs to make a roll, tell them exactly what to roll (e.g., "Make a DC 15 Dexterity saving throw" or "Roll a Perception check") and then describe the narrative outcome based on their roll result.
+
+You may roll dice for NPCs, monsters, and environmental effects only. When describing outcomes, say things like "please roll your d20 + Strength modifier" or "make your initiative check now".
+
+${rollAnalysis.needsRoll ? `ROLL REQUEST DETECTED: ${rollAnalysis.guidance}` : ""}
+
+Respond narratively, guide the player through their rolls, describe outcomes based on their roll results, keep it engaging and true to 5e.
 Player's current action: ${playerAction}
 `;
 
@@ -100,6 +217,63 @@ Player's current action: ${playerAction}
     { role: "user", content: playerAction },
   ];
 }
+
+// Test function to demonstrate DM roll rule behavior
+function testDMRollRule() {
+  console.log("🧪 Testing DM Roll Rule Implementation");
+
+  // Test cases for roll analysis
+  const testCases = [
+    "I want to attack the goblin",
+    "Let me roll for perception",
+    "I cast fireball, roll for attack",
+    "Please roll my saving throw",
+    "I search for traps",
+    "What do I see in the room?",
+  ];
+
+  testCases.forEach((action, index) => {
+    const analysis = analyzeRollRequest(action);
+    console.log(`${index + 1}. "${action}"`);
+    console.log(`   Needs Roll: ${analysis.needsRoll}`);
+    if (analysis.guidance) {
+      console.log(`   Guidance: ${analysis.guidance}`);
+    }
+    console.log("");
+  });
+
+  return "DM roll rule test completed - see console for results";
+}
+
+// Documentation for DM roll rule implementation
+/**
+ * DM Roll Rule Implementation
+ *
+ * This AI service implements a strict rule that the DM (AI) NEVER rolls dice for player characters.
+ * This maintains player agency and follows traditional tabletop RPG best practices.
+ *
+ * IMPLEMENTATION DETAILS:
+ * 1. Roll Request Detection: analyzeRollRequest() identifies when players request rolls
+ * 2. AI Prompt Enforcement: System prompt explicitly forbids rolling for players
+ * 3. Guidance System: AI provides clear instructions on what players should roll
+ * 4. NPC/Monster Rolls: AI can roll for non-player entities when appropriate
+ *
+ * PLAYER ROLL TYPES HANDLED:
+ * - Attack rolls (melee/ranged/spell attacks)
+ * - Ability checks (Strength, Dexterity, etc.)
+ * - Saving throws (Dexterity saves, etc.)
+ * - Initiative rolls
+ * - Death saving throws
+ * - Skill checks (Perception, Stealth, etc.)
+ *
+ * USAGE EXAMPLES:
+ * ✅ Player says: "I attack the goblin"
+ *    DM responds: "Roll a d20 and add your Strength modifier + proficiency bonus"
+ *
+ * ❌ NEVER: DM rolls for player and says "You rolled 17, hit!"
+ *
+ * ✅ NPC rolls: DM can say "The goblin attacks you. I rolled 12, miss!"
+ */
 
 // Main function to query AI or fallback to stub
 async function queryAI(playerAction, config, character, history) {
@@ -232,6 +406,26 @@ async function queryAI(playerAction, config, character, history) {
   }
 }
 
-export { queryAI };
+/**
+ * Get pacing guidance based on session duration
+ * @param {number} sessionTimeMinutes - Session length in minutes
+ * @returns {string} Pacing guidance for the AI DM
+ */
+function getPacingGuidance(sessionTimeMinutes) {
+  if (sessionTimeMinutes <= 15) {
+    return "This is an ULTRA-SHORT session! Focus on ONE main encounter or objective. Keep descriptions brief, limit side activities, and drive toward a quick resolution. Aim for 1-2 significant moments only.";
+  } else if (sessionTimeMinutes <= 30) {
+    return "This is a SHORT session! Focus on 1-2 encounters maximum. Be efficient with descriptions, prioritize action over extensive dialogue, and ensure clear objectives with quick resolutions.";
+  } else if (sessionTimeMinutes <= 60) {
+    return "This is a STANDARD session! Balance exploration and encounters appropriately. Allow some roleplaying and side objectives, but maintain good pacing to fit everything comfortably.";
+  } else if (sessionTimeMinutes <= 120) {
+    return "This is a LONG session! Allow deeper exploration, more complex encounters, extensive roleplaying opportunities, and multiple objectives with room for character development.";
+  } else {
+    return "This is an EXTENDED session! Provide rich world-building, complex multi-stage encounters, extensive character interactions, and deep narrative exploration with plenty of time for detailed roleplaying.";
+  }
+}
+
+export { queryAI, testDMRollRule, analyzeRollRequest, getPacingGuidance };
 
 // To add more providers, extend the queryAI function and update the Settings UI accordingly.
+// Use testDMRollRule() in development to verify DM roll rule implementation.
