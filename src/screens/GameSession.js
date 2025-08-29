@@ -69,8 +69,13 @@ const GameSession = ({ navigation, route }) => {
     // { id: "1", name: "Short Sword", type: "Weapon", description: "A basic sword.", quantity: 1 }
   ]);
 
-  // Session config
+  // Session timer state
   const config = route.params?.config || {};
+  const sessionMinutes = config.sessionTime || 30;
+  const [secondsLeft, setSecondsLeft] = useState(sessionMinutes * 60);
+  const [timerActive, setTimerActive] = useState(true);
+  const [timerInterval, setTimerInterval] = useState(null);
+  const [timerPacingStage, setTimerPacingStage] = useState(0); // 0: none, 1: 50%, 2: 80%, 3: 95%, 4: ended
 
   // Load session log on mount (or use initial config/character)
   React.useEffect(() => {
@@ -100,6 +105,35 @@ const GameSession = ({ navigation, route }) => {
     // eslint-disable-next-line
   }, []);
 
+  // Session timer effect
+  React.useEffect(() => {
+    if (!timerActive || sessionLoaded === false) return;
+    if (timerInterval) return; // already running
+
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    setTimerInterval(interval);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line
+  }, [timerActive, sessionLoaded]);
+
+  // Cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+    // eslint-disable-next-line
+  }, []);
+
   // Save session log after each message change
   React.useEffect(() => {
     async function saveLog() {
@@ -119,6 +153,60 @@ const GameSession = ({ navigation, route }) => {
   }, [messages, tokens, sessionLoaded]);
 
   // Pacing logic: reminders at 50%, 80%, 95%, and auto-end at 0
+  React.useEffect(() => {
+    if (!timerActive || sessionLoaded === false) return;
+    const thresholds = [
+      {
+        percent: 0.5,
+        stage: 1,
+        message:
+          "Half your session time has passed. Consider moving the story forward!",
+      },
+      {
+        percent: 0.8,
+        stage: 2,
+        message:
+          "Only 20% of your session remains. Prepare for a climax or resolution soon!",
+      },
+      {
+        percent: 0.95,
+        stage: 3,
+        message: "Time is almost up! The adventure is reaching its end.",
+      },
+    ];
+    const totalSeconds = sessionMinutes * 60;
+    for (const t of thresholds) {
+      if (
+        secondsLeft <= Math.floor(totalSeconds * (1 - t.percent)) &&
+        timerPacingStage < t.stage
+      ) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${prev.length + 1}`,
+            text: `⏰ [AI]: ${t.message}`,
+            isDM: true,
+          },
+        ]);
+        setTimerPacingStage(t.stage);
+        break;
+      }
+    }
+    // Auto-end session with wrap-up
+    if (secondsLeft === 0 && timerPacingStage < 4) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${prev.length + 1}`,
+          text: "⏰ [AI]: Time is up! The session concludes here. The DM will provide a narrative wrap-up and rewards. Thank you for playing!",
+          isDM: true,
+        },
+      ]);
+      setTimerPacingStage(4);
+      setTimerActive(false);
+    }
+    // eslint-disable-next-line
+  }, [secondsLeft, timerActive, sessionLoaded]);
 
   const handleSubmit = async () => {
     if (!inputText.trim()) return;
@@ -255,6 +343,16 @@ const GameSession = ({ navigation, route }) => {
       keyboardVerticalOffset={80}
     >
       {backgroundElement}
+      {/* Session Timer UI */}
+      <View style={styles.timerContainer}>
+        <Text style={[styles.timerText, { color: theme.accent }]}>
+          ⏳ Time Left:{" "}
+          {Math.floor(secondsLeft / 60)
+            .toString()
+            .padStart(2, "0")}
+          :{(secondsLeft % 60).toString().padStart(2, "0")}
+        </Text>
+      </View>
       {/* MapPanel pop-out */}
       <MapPanel
         visible={mapPanelVisible}
@@ -722,6 +820,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     letterSpacing: 0.5,
+  },
+  timerContainer: {
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 0,
+  },
+  timerText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    letterSpacing: 1,
+    padding: 6,
   },
   tokenPromptOverlay: {
     position: "absolute",
