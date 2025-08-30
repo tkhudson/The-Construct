@@ -6,14 +6,14 @@ const themes = {
     background: {
       type: "image",
       image: require("../../assets/DnDTheme.jpg"),
-      fallback: "#232946", // Deep navy as fallback
+      fallback: "#131520", // Darker navy as fallback
     },
-    accent: "#7f9cf5", // Pastel blue
-    button: "#7f9cf5",
-    buttonText: "#eaeaea",
-    text: "#eaeaea",
-    card: "#2a2d3e",
-    border: "#7f9cf5",
+    accent: "#4a69bd", // Deep sapphire blue
+    button: "#4a69bd",
+    buttonText: "#ffffff",
+    text: "#ffffff",
+    card: "#1a1c2a",
+    border: "#4a69bd",
     characterOptions: {
       races: ["Human", "Elf", "Dwarf", "Halfling", "Tiefling", "Dragonborn"],
       classes: ["Fighter", "Wizard", "Rogue", "Cleric", "Paladin", "Warlock"],
@@ -39,14 +39,14 @@ const themes = {
     background: {
       type: "image",
       image: require("../../assets/ModernApocalypse.jpg"),
-      fallback: "#2d3a2e", // Muted green-gray if image fails
+      fallback: "#1a2111", // Dark military green if image fails
     },
-    accent: "#7ed6a7", // Pastel green
-    button: "#7ed6a7",
-    buttonText: "#232926",
-    text: "#eaeaea",
-    card: "#26332a",
-    border: "#7ed6a7",
+    accent: "#5c8d76", // Deep forest green
+    button: "#5c8d76",
+    buttonText: "#ffffff",
+    text: "#ffffff",
+    card: "#1c2419",
+    border: "#5c8d76",
     characterOptions: {
       races: ["Human"],
       classes: [
@@ -83,14 +83,14 @@ const themes = {
     key: "Star Wars",
     background: {
       type: "gradient",
-      colors: ["#23232e", "#4e3a5a"], // Soft black to pastel purple
+      colors: ["#0f0f1a", "#2a1f36"], // Deep space black to dark purple
     },
-    accent: "#b39ddb", // Pastel purple
-    button: "#b39ddb",
-    buttonText: "#23232e",
-    text: "#eaeaea",
-    card: "#2d263a",
-    border: "#b39ddb",
+    accent: "#6c5ce7", // Electric purple
+    button: "#6c5ce7",
+    buttonText: "#ffffff",
+    text: "#ffffff",
+    card: "#191621",
+    border: "#6c5ce7",
     characterOptions: {
       races: ["Human", "Twi'lek", "Zabrak", "Droid", "Wookiee", "Rodian"],
       classes: [
@@ -122,14 +122,14 @@ const themes = {
     key: "Post-Apocalyptic Wasteland",
     background: {
       type: "gradient",
-      colors: ["#3a2d26", "#6e5e4e"], // Muted brown to gray
+      colors: ["#1a1412", "#382f28"], // Dark wasteland colors
     },
-    accent: "#f7c59f", // Pastel orange
-    button: "#f7c59f",
-    buttonText: "#3a2d26",
-    text: "#eaeaea",
-    card: "#3a2d26",
-    border: "#f7c59f",
+    accent: "#c0392b", // Deep rust red
+    button: "#c0392b",
+    buttonText: "#ffffff",
+    text: "#ffffff",
+    card: "#201b15",
+    border: "#c0392b",
     characterOptions: {
       races: ["Human", "Mutant", "Android"],
       classes: ["Scavenger", "Raider", "Medic", "Tinker", "Hunter", "Wanderer"],
@@ -154,14 +154,14 @@ const themes = {
     key: "Custom",
     background: {
       type: "gradient",
-      colors: ["#233e3e", "#5ecfcf"], // Pastel teal gradient
+      colors: ["#141e1e", "#1e3131"], // Dark teal gradient
     },
-    accent: "#5ecfcf", // Pastel teal
-    button: "#5ecfcf",
-    buttonText: "#233e3e",
-    text: "#eaeaea",
-    card: "#233e3e",
-    border: "#5ecfcf",
+    accent: "#2d98da", // Deep ocean blue
+    button: "#2d98da",
+    buttonText: "#ffffff",
+    text: "#ffffff",
+    card: "#162121",
+    border: "#2d98da",
     characterOptions: {
       races: ["Human", "Elf", "Dwarf", "Custom Race"],
       classes: ["Adventurer", "Mystic", "Inventor", "Custom Class"],

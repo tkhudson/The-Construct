@@ -11,19 +11,16 @@ const PANEL_CONFIGS = {
   map: {
     id: "map",
     position: "right",
-    tabTop: 100,
     zIndex: 25,
   },
   dice: {
     id: "dice",
     position: "right",
-    tabTop: 160,
     zIndex: 25,
   },
   inventory: {
     id: "inventory",
     position: "right",
-    tabTop: 220,
     zIndex: 25,
   },
 };
@@ -74,11 +71,14 @@ const PanelManager = ({
   }, []);
 
   // Close a specific panel
-  const closePanel = useCallback((panelId) => {
-    if (activePanel === panelId) {
-      setActivePanel(null);
-    }
-  }, [activePanel]);
+  const closePanel = useCallback(
+    (panelId) => {
+      if (activePanel === panelId) {
+        setActivePanel(null);
+      }
+    },
+    [activePanel],
+  );
 
   // Close all panels
   const closeAllPanels = useCallback(() => {

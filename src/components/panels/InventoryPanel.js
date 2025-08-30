@@ -297,29 +297,6 @@ const InventoryPanel = ({
           </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Inventory Tab Button - only render when panel is closed */}
-      {!visible && !anyPanelOpen && (
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            {
-              right: panelPosition === "right" ? 0 : undefined,
-              left: panelPosition === "left" ? 0 : undefined,
-              backgroundColor: theme?.accent || "#7f9cf5",
-              ...(Platform.OS === "web"
-                ? { boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }
-                : {}),
-            },
-          ]}
-          onPress={handleOpen}
-          accessible={true}
-          accessibilityLabel={`Open inventory${inventory.length > 0 ? ` (${inventory.length} items)` : ""}`}
-          accessibilityHint="Double tap to open your inventory panel"
-        >
-          <Ionicons name="bag" size={24} color="#fff" />
-          <Text style={styles.tabButtonText}>Inventory</Text>
-        </TouchableOpacity>
-      )}
     </>
   );
 };
@@ -409,31 +386,6 @@ const styles = StyleSheet.create({
     minWidth: 44,
     minHeight: 28,
     elevation: 1,
-  },
-  tabButton: {
-    position: "absolute",
-    top: 200,
-    zIndex: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
-    elevation: 4,
-    // shadow* props are kept for native, but web uses boxShadow above
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-  },
-  tabButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginLeft: 8,
-    letterSpacing: 1,
   },
 });
 
