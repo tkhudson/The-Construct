@@ -180,27 +180,6 @@ const MapPanel = ({
           </View>
         </Animated.View>
       </PanGestureHandler>
-
-      {/* Map Tab Button - only render when panel is closed */}
-      {!visible && !anyPanelOpen && (
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            {
-              right: panelPosition === "right" ? 0 : undefined,
-              left: panelPosition === "left" ? 0 : undefined,
-              backgroundColor: theme?.accent || "#7f9cf5",
-            },
-          ]}
-          onPress={handleOpen}
-          accessible={true}
-          accessibilityLabel="Open tactical map"
-          accessibilityHint="Double tap to open the tactical grid map for combat and exploration"
-        >
-          <Ionicons name="map" size={24} color="#fff" />
-          <Text style={styles.tabButtonText}>Map</Text>
-        </TouchableOpacity>
-      )}
     </>
   );
 };
@@ -248,30 +227,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 12,
     letterSpacing: 0.5,
-  },
-  tabButton: {
-    position: "absolute",
-    top: 100, // Moved down slightly to avoid overlap with other panels
-    zIndex: 35,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-  },
-  tabButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginLeft: 8,
-    letterSpacing: 1,
   },
 });
 

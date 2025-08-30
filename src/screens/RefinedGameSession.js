@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,26 +9,44 @@ import {
   Platform,
   TouchableOpacity,
   ImageBackground,
+  Dimensions,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  runOnJS,
+  Easing,
+} from "react-native-reanimated";
+import { PanGestureHandler } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
-import { rollD20 } from "../utils/diceRoller";
-import { queryAI } from "../utils/aiService";
-import { useTheme } from "../theme/ThemeProvider";
+import * as ImagePicker from "expo-image-picker";
+import * as HapticFeedback from "expo-haptics";
+
+// Components
+import AnimatedButton from "../components/AnimatedButton";
 import ErrorBoundary from "../components/ErrorBoundary";
-import {
-  saveSessionLog,
-  loadSessionLog,
-  clearSessionLog,
-} from "../utils/sessionLog";
-// Session management using local state - sessionManager removed to avoid circular imports
 import MapGrid from "../components/MapGrid";
 import MapPanel from "../components/panels/MapPanel";
 import DiceRollerPanel from "../components/panels/DiceRollerPanel";
 import InventoryPanel from "../components/panels/InventoryPanel";
 import QuickActionsPanel from "../components/panels/QuickActionsPanel";
-import { getShadowStyle, getTextStyle } from "../theme/themeUtils";
 
-import * as ImagePicker from "expo-image-picker";
+// Utils and Services
+import { rollD20 } from "../utils/diceRoller";
+import { queryAI } from "../utils/aiService";
+import { createPressAnimation } from "../utils/animations";
+import { getShadowStyle, getTextStyle } from "../theme/themeUtils";
+import {
+  saveSessionLog,
+  loadSessionLog,
+  clearSessionLog,
+} from "../utils/sessionLog";
+
+// Theme
+import { useTheme } from "../theme/ThemeProvider";
 
 const RefinedGameSession = ({ navigation, route }) => {
   // Enhanced theme integration
@@ -41,6 +59,34 @@ const RefinedGameSession = ({ navigation, route }) => {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [quickActionsPanelVisible, setQuickActionsPanelVisible] =
     useState(false);
+  const saveScale = useSharedValue(1);
+  const saveFade = useSharedValue(1);
+  const messageScale = useSharedValue(0);
+  const panelSlide = useSharedValue(-300);
+  const inputAreaSlide = useSharedValue(100);
+  const inputAreaOpacity = useSharedValue(0);
+
+  // Create animated styles
+  const inputAreaStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: inputAreaSlide.value }],
+    opacity: inputAreaOpacity.value,
+  }));
+
+  // Animate input area on mount
+  useEffect(() => {
+    if (!inputAreaSlide || !inputAreaOpacity) return;
+
+    inputAreaSlide.value = withSpring(0, {
+      damping: 8,
+      stiffness: 50,
+      useNativeDriver: false,
+    });
+    inputAreaOpacity.value = withTiming(1, {
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    });
+  }, [inputAreaSlide, inputAreaOpacity]);
 
   // Map and token management
   const [tokens, setTokens] = useState([]);
@@ -114,7 +160,11 @@ const RefinedGameSession = ({ navigation, route }) => {
         const character = route.params?.character || {};
         if (config.theme) setThemeKey(config.theme);
 
-        const initialMessage = `Welcome to your ${config.theme || "fantasy"} adventure! As a ${character.race || "brave"} ${character.class || "adventurer"}, you find yourself in a mysterious setting. What do you do?`;
+        const initialMessage = `Welcome to your ${
+          config.theme || "fantasy"
+        } adventure! As a ${(character && character.race) || "brave"} ${
+          (character && character.class) || "adventurer"
+        }, you find yourself in a mysterious setting. What do you do?`;
         setMessages([{ id: "1", text: initialMessage, isDM: true }]);
       }
       setSessionLoaded(true);
@@ -134,12 +184,15 @@ const RefinedGameSession = ({ navigation, route }) => {
       setThemeKey(config.theme);
     }
   }, [route.params?.config?.theme, setThemeKey]);
+
   // Initialize session with basic state management
   useEffect(() => {
     const initializeSession = () => {
       try {
         // Generate session ID
-        const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const newSessionId = `session_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
         setSessionId(newSessionId);
 
         // Initialize session stats
@@ -162,137 +215,96 @@ const RefinedGameSession = ({ navigation, route }) => {
     }
   }, [sessionId]);
 
-  // Session management
-  useEffect(() => {
-    return () => {
-      // Cleanup when component unmounts
-    };
-  }, []);
-
   // Auto-save session data
   useEffect(() => {
     if (sessionId) {
       const autoSave = async () => {
         try {
-          // Save session data using existing session log system
-          const sessionData = {
-            id: sessionId,
-            messages,
-            tokens,
-            character: route.params?.character || {},
-            config: route.params?.config || {},
-            lastModified: Date.now(),
-            conversationHistory: messages,
-            totalPlayTime: Math.floor(Date.now() / 1000 / 60), // Simple play time calculation
-          };
-
-          // Store in AsyncStorage for persistence
-          const AsyncStorage =
-            require("@react-native-async-storage/async-storage").default;
-          await AsyncStorage.setItem(
-            `the_construct_session_${sessionId}`,
-            JSON.stringify(sessionData),
-          );
-
-          console.log("[GameSession] Session auto-saved");
+          await saveLog();
+          console.log("[GameSession] Auto-saved session:", sessionId);
         } catch (error) {
           console.error("[GameSession] Auto-save error:", error);
         }
       };
 
-      autoSave();
+      const autoSaveInterval = setInterval(autoSave, 60000); // Auto-save every minute
+
+      return () => {
+        clearInterval(autoSaveInterval);
+      };
     }
-  }, [messages, tokens, sessionId]);
+  }, [sessionId, saveLog]);
 
   // Handle manual save with export option
   const handleSaveSession = useCallback(
     async (format = "json") => {
       try {
-        if (!sessionId) {
-          console.warn("[GameSession] No active session to save");
-          return;
-        }
-
-        const sessionData = {
-          id: sessionId,
-          messages,
-          tokens,
-          character: route.params?.character || {},
-          config: route.params?.config || {},
-          exportedAt: Date.now(),
-          format,
-          conversationHistory: messages,
-          sessionStats: sessionStats,
-        };
-
-        // For now, save to AsyncStorage and log
-        const AsyncStorage =
-          require("@react-native-async-storage/async-storage").default;
-        await AsyncStorage.setItem(
-          `the_construct_export_${sessionId}`,
-          JSON.stringify(sessionData),
-        );
-
+        await saveLog();
+        console.log("[GameSession] Manual save completed");
         setSessionExports((prev) => prev + 1);
-        console.log(
-          `[GameSession] Session exported as ${format}:`,
-          sessionData,
-        );
-
-        // Basic console export for testing
-        if (format === "json") {
-          console.log("Session JSON:", JSON.stringify(sessionData, null, 2));
-        }
       } catch (error) {
-        console.error("[GameSession] Save error:", error);
+        console.error("[GameSession] Manual save error:", error);
       }
     },
-    [sessionId, messages, tokens, sessionStats],
+    [saveLog],
   );
 
-  // AI message handling with better error handling
-  const handleSubmit = async () => {
-    if (!inputText.trim()) return;
+  // Message handling
+  const handleSendMessage = useCallback(async () => {
+    if (!inputText.trim() || isContinuing) return;
 
-    const config = route.params?.config || {};
-    const character = route.params?.character || {};
-
-    const newMessages = [
-      ...messages,
-      { id: `${Date.now()}`, text: inputText, isDM: false },
-    ];
-    setMessages(newMessages);
+    const newMessage = {
+      id: Date.now().toString(),
+      text: inputText,
+      isDM: false,
+    };
+    setMessages((prev) => [...prev, newMessage]);
     setInputText("");
-    setIsContinuing(true);
 
     try {
-      const aiResponse = await queryAI(
+      setIsContinuing(true);
+      const config = route.params?.config || {};
+      const character = route.params?.character || {
+        race: "adventurer",
+        class: "wanderer",
+        background: "mysterious traveler",
+        backstory: "A brave soul seeking adventure",
+      };
+      const response = await queryAI(
         inputText,
         config,
         character,
         messages.slice(-5),
       );
-
-      newMessages.push({
-        id: `${Date.now()}`,
-        text: aiResponse,
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        text: response,
         isDM: true,
-        timestamp: Date.now(),
-      });
-      setMessages([...newMessages]);
+      };
+      setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
-      console.error("AI Error:", error);
+      console.error("[GameSession] AI query error:", error);
       const errorMessage = {
-        id: `${Date.now()}`,
-        text: "I apologize, but I encountered an error processing your request. Please try again.",
+        id: Date.now().toString(),
+        text: "The DM pauses for a moment to gather their thoughts. Let me rephrase that - what would you like to do?",
         isDM: true,
         isError: true,
       };
+      messageScale.value = withSequence(
+        withTiming(1.05, {
+          duration: 100,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        withTiming(1, {
+          duration: 100,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      );
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsContinuing(false);
     }
-  };
+  }, [inputText, isContinuing, messages]);
 
   // Enhanced token management
   const handlePlaceToken = useCallback((x, y) => {
@@ -304,19 +316,18 @@ const RefinedGameSession = ({ navigation, route }) => {
     setTokens((prev) =>
       prev.map((token) => (token.id === tokenId ? { ...token, x, y } : token)),
     );
-    setSelectedTokenId(null);
   }, []);
 
   const createToken = useCallback(() => {
     if (!pendingCell) return;
 
     const newToken = {
-      id: `${Date.now()}`,
+      id: Date.now().toString(),
       type: tokenPromptType,
+      label: tokenPromptLabel || "Token",
+      imageUri: tokenPromptImageUri,
       x: pendingCell.x,
       y: pendingCell.y,
-      label: tokenPromptLabel || undefined,
-      imageUri: tokenPromptImageUri || undefined,
     };
 
     setTokens((prev) => [...prev, newToken]);
@@ -332,7 +343,7 @@ const RefinedGameSession = ({ navigation, route }) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.5,
     });
 
     if (!result.canceled) {
@@ -346,68 +357,66 @@ const RefinedGameSession = ({ navigation, route }) => {
     setMessages((prev) => [
       ...prev,
       {
-        id: `${Date.now()}`,
-        text: `🎲 You rolled a d20: ${result}`,
-        isDM: false,
-        isDiceRoll: true,
-        dice: {
-          label: "d20",
-          sides: 20,
-          count: 1,
-          rolls: [result],
-          total: result,
-        },
+        id: Date.now().toString(),
+        text: `🎲 Rolled a d20: ${result}`,
+        isDM: true,
+        isRoll: true,
       },
     ]);
   }, []);
 
-  // Enhanced message rendering
+  // Component unmount animations
+  useEffect(() => {
+    return () => {
+      // Animate out before unmounting
+      inputAreaSlide.value = withTiming(100, {
+        duration: 200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
+      });
+      inputAreaOpacity.value = withTiming(0, {
+        duration: 150,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
+      });
+    };
+  }, [inputAreaSlide, inputAreaOpacity]);
+
+  // Clear animations on unmount
+  React.useEffect(() => {
+    return () => {
+      // Cleanup animations
+      console.log("[GameSession] Cleaning up animations");
+    };
+  }, []);
+
+  // Message rendering
   const renderMessage = ({ item }) => (
-    <View
+    <Animated.View
       style={[
-        styles.message,
-        {
-          alignSelf: item.isDM ? "flex-start" : "flex-end",
-          backgroundColor: item.isDM
-            ? theme?.card || "#232946"
-            : theme?.accent || "#7f9cf5",
-          ...getShadowStyle(theme || {}),
-        },
+        styles.messageContainer,
+        item.isDM ? styles.dmMessage : styles.playerMessage,
+        item.isError && styles.errorMessage,
+        item.isRoll && styles.rollMessage,
+        { backgroundColor: item.isDM ? theme.dmMessage : theme.playerMessage },
       ]}
     >
-      <Text
-        style={[
-          styles.messageText,
-          {
-            color: item.isDM
-              ? theme?.text || "#fff"
-              : theme?.buttonText || "#fff",
-          },
-        ]}
-      >
+      <Text style={[styles.messageText, { color: theme.text }]}>
         {item.text}
       </Text>
-    </View>
+    </Animated.View>
   );
 
-  // Theme background handling
+  // Background rendering
   const renderBackground = () => {
-    if (!theme?.background) {
-      return (
-        <View
-          style={[styles.backgroundImage, { backgroundColor: "#232946" }]}
-        />
-      );
-    }
+    const background = theme?.background || {};
 
-    const background = theme.background;
-
-    if (background.type === "image" && background.image) {
+    if (background.type === "image" && background.source) {
       return (
         <ImageBackground
-          source={background.image}
+          source={background.source}
           style={styles.backgroundImage}
-          imageStyle={{ resizeMode: "cover", opacity: 0.3 }}
+          resizeMode="cover"
         />
       );
     } else if (background.type === "gradient" && background.colors) {
@@ -439,25 +448,8 @@ const RefinedGameSession = ({ navigation, route }) => {
         {/* Theme background */}
         {renderBackground()}
 
-        {/* Session management buttons */}
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={[
-              styles.sessionButton,
-              { backgroundColor: theme?.button || "#7f9cf5" },
-            ]}
-            onPress={() => handleSaveSession("json")}
-          >
-            <Text
-              style={[
-                styles.sessionButtonText,
-                { color: theme?.buttonText || "#fff" },
-              ]}
-            >
-              💾 Save ({sessionExports})
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Corner Save Button */}
+        {/* Game content starts here */}
 
         {/* Messages */}
         <FlatList
@@ -468,241 +460,188 @@ const RefinedGameSession = ({ navigation, route }) => {
           contentContainerStyle={{ paddingBottom: 20 }}
         />
 
-        {/* Session management options */}
-        <TouchableOpacity
-          style={[
-            styles.quickSaveButton,
-            { backgroundColor: theme?.button || "#7f9cf5" },
-          ]}
-          onPress={() => handleSaveSession("json")}
-        >
-          <Text
-            style={[
-              styles.quickSaveText,
-              { color: theme?.buttonText || "#fff" },
-            ]}
-          >
-            Quick Save
-          </Text>
-        </TouchableOpacity>
-
         {/* Input area */}
-        <View
-          style={[
-            styles.inputContainer,
-            {
-              backgroundColor: theme?.card || "#232946",
-              borderColor: theme?.border || "#393e6e",
-            },
-          ]}
-        >
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                color: theme?.text || "#fff",
-                borderColor: theme?.border || "#393e6e",
-                backgroundColor: theme?.card || "#232946",
-              },
-            ]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Enter your action..."
-            placeholderTextColor={`${theme?.text || "#fff"}80`}
-            multiline
-            maxLength={500}
-            onSubmitEditing={handleSubmit}
-            editable={!isContinuing}
-          />
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              {
-                backgroundColor: isContinuing
-                  ? "#666"
-                  : theme?.button || "#7f9cf5",
-              },
-            ]}
-            onPress={handleSubmit}
-            disabled={isContinuing || !inputText.trim()}
-          >
-            <Text style={{ color: theme?.buttonText || "#fff" }}>
-              {isContinuing ? "..." : "Send"}
-            </Text>
-          </TouchableOpacity>
-          {/* Quick Action Buttons */}
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity
+        <Animated.View style={[styles.inputContainer, inputAreaStyle]}>
+          <View style={styles.inputRow}>
+            <TextInput
               style={[
-                styles.actionButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
+                styles.input,
+                { backgroundColor: theme.inputBackground, color: theme.text },
               ]}
-              onPress={() => setMapPanelVisible(true)}
-            >
-              <Text style={{ color: theme?.buttonText || "#fff" }}>Map</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
-              ]}
-              onPress={() => setDicePanelVisible(true)}
-            >
-              <Text style={{ color: theme?.buttonText || "#fff" }}>Dice</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
-              ]}
-              onPress={() => setInventoryPanelVisible(true)}
-            >
-              <Text style={{ color: theme?.buttonText || "#fff" }}>
-                Inventory
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                { backgroundColor: theme?.button || "#7f9cf5" },
-              ]}
-              onPress={() => setQuickActionsPanelVisible(true)}
-            >
-              <Text style={{ color: theme?.buttonText || "#fff" }}>
-                Actions
-              </Text>
-            </TouchableOpacity>
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="What do you do?"
+              placeholderTextColor={theme.placeholder}
+              multiline
+            />
+            <View style={styles.buttonContainer}>
+              <AnimatedButton
+                onPress={() => setDicePanelVisible(true)}
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: theme?.buttonText || "#fff" },
+                  ]}
+                >
+                  🎲
+                </Text>
+              </AnimatedButton>
+              <AnimatedButton
+                onPress={() => setMapPanelVisible(true)}
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: theme?.buttonText || "#fff" },
+                  ]}
+                >
+                  🗺️
+                </Text>
+              </AnimatedButton>
+              <AnimatedButton
+                onPress={() => setInventoryPanelVisible(true)}
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: theme?.buttonText || "#fff" },
+                  ]}
+                >
+                  🎒
+                </Text>
+              </AnimatedButton>
+              <AnimatedButton
+                onPress={() => setQuickActionsPanelVisible(true)}
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: theme?.buttonText || "#fff" },
+                  ]}
+                >
+                  ⚡
+                </Text>
+              </AnimatedButton>
+            </View>
           </View>
-        </View>
+          <View style={styles.sendButtonContainer}>
+            <AnimatedButton
+              onPress={handleSendMessage}
+              disabled={!inputText.trim() || isContinuing}
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: theme?.button || "#7f9cf5",
+                  opacity: !inputText.trim() || isContinuing ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sendButtonText,
+                  { color: theme?.buttonText || "#fff" },
+                ]}
+              >
+                {isContinuing ? "..." : "➤"}
+              </Text>
+            </AnimatedButton>
+          </View>
+        </Animated.View>
 
         {/* Map Panel */}
         <MapPanel
           visible={mapPanelVisible}
           onClose={() => setMapPanelVisible(false)}
           onOpen={() => setMapPanelVisible(true)}
+          theme={theme}
           panelPosition="right"
-          anyPanelOpen={dicePanelVisible || inventoryPanelVisible}
-          theme={theme || {}}
+          anyPanelOpen={
+            inventoryPanelVisible ||
+            dicePanelVisible ||
+            quickActionsPanelVisible
+          }
         >
-          <View style={styles.mapContent}>
-            {showTokenPrompt && pendingCell && (
-              <View style={styles.tokenPromptOverlay}>
-                <View
+          <MapGrid
+            tokens={tokens}
+            onPlaceToken={handlePlaceToken}
+            onMoveToken={handleMoveToken}
+            selectedTokenId={selectedTokenId}
+            onSelectToken={setSelectedTokenId}
+          />
+          {showTokenPrompt && (
+            <View
+              style={[
+                styles.tokenPrompt,
+                { backgroundColor: theme?.card || "#2b2b2b" },
+              ]}
+            >
+              <Text style={[styles.tokenPromptTitle, { color: theme.text }]}>
+                Add Token
+              </Text>
+              <TextInput
+                style={[
+                  styles.tokenPromptInput,
+                  {
+                    backgroundColor: theme.inputBackground,
+                    color: theme.text,
+                  },
+                ]}
+                value={tokenPromptLabel}
+                onChangeText={setTokenPromptLabel}
+                placeholder="Token Label"
+                placeholderTextColor={theme.placeholder}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.tokenPromptButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+                onPress={pickTokenImage}
+              >
+                <Text
                   style={[
-                    styles.tokenPromptBox,
-                    { backgroundColor: theme?.card || "#232946" },
+                    styles.tokenPromptButtonText,
+                    { color: theme?.buttonText || "#fff" },
                   ]}
                 >
-                  <Text
-                    style={getTextStyle(theme || {}, { variant: "subheader" })}
-                  >
-                    Place Token at ({pendingCell.x + 1}, {pendingCell.y + 1})
-                  </Text>
-
-                  {/* Token type selection */}
-                  <View style={styles.tokenTypeRow}>
-                    {["player", "npc", "monster"].map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[
-                          styles.tokenTypeButton,
-                          {
-                            backgroundColor:
-                              tokenPromptType === type
-                                ? theme?.accent || "#7f9cf5"
-                                : theme?.button || "#7f9cf5",
-                          },
-                        ]}
-                        onPress={() => setTokenPromptType(type)}
-                      >
-                        <Text style={{ color: theme?.buttonText || "#fff" }}>
-                          {type.toUpperCase()}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Quick token buttons */}
-                  <View style={styles.quickTokensRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.quickToken,
-                        { backgroundColor: theme?.accent || "#7f9cf5" },
-                      ]}
-                      onPress={() => {
-                        setTokenPromptType("player");
-                        createToken();
-                      }}
-                    >
-                      <Text style={{ color: theme?.buttonText || "#fff" }}>
-                        Player
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.quickToken,
-                        { backgroundColor: theme?.accent || "#7f9cf5" },
-                      ]}
-                      onPress={() => {
-                        setTokenPromptType("monster");
-                        setTokenPromptLabel("Goblin");
-                        createToken();
-                      }}
-                    >
-                      <Text style={{ color: theme?.buttonText || "#fff" }}>
-                        Goblin
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Action buttons */}
-                  <View style={styles.buttonRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.button,
-                        { backgroundColor: theme?.accent || "#7f9cf5" },
-                      ]}
-                      onPress={pickTokenImage}
-                    >
-                      <Text style={{ color: theme?.buttonText || "#fff" }}>
-                        Pick Image
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.button,
-                        { backgroundColor: theme?.accent || "#7f9cf5" },
-                      ]}
-                      onPress={createToken}
-                    >
-                      <Text style={{ color: theme?.buttonText || "#fff" }}>
-                        Place Token
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.button, { backgroundColor: "#b23b3b" }]}
-                      onPress={() => {
-                        setShowTokenPrompt(false);
-                        setPendingCell(null);
-                      }}
-                    >
-                      <Text style={{ color: "#fff" }}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            <MapGrid
-              tokens={tokens}
-              onPlaceToken={handlePlaceToken}
-              onMoveToken={handleMoveToken}
-              selectedTokenId={selectedTokenId}
-              onTokenSelect={setSelectedTokenId}
-              theme={theme || {}}
-              style={styles.mapGrid}
-            />
-          </View>
+                  Pick Image
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tokenPromptButton,
+                  { backgroundColor: theme?.button || "#7f9cf5" },
+                ]}
+                onPress={createToken}
+              >
+                <Text
+                  style={[
+                    styles.tokenPromptButtonText,
+                    { color: theme?.buttonText || "#fff" },
+                  ]}
+                >
+                  Create Token
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </MapPanel>
 
         {/* Dice Roller Panel */}
@@ -710,27 +649,7 @@ const RefinedGameSession = ({ navigation, route }) => {
           visible={dicePanelVisible}
           onClose={() => setDicePanelVisible(false)}
           onOpen={() => setDicePanelVisible(true)}
-          onRoll={async (result) => {
-            // Add roll to conversation
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `${Date.now()}`,
-                text: `🎲 You rolled ${result.count > 1 ? result.count + result.label : result.label}: ${result.rolls.join(", ")} (Total: ${result.total})`,
-                isDM: false,
-                isDiceRoll: true,
-                dice: result,
-              },
-            ]);
-
-            // Update session stats with roll count
-            setSessionStats((prev) => ({
-              ...prev,
-              rollCount: (prev.rollCount || 0) + 1,
-              lastRoll: result,
-            }));
-          }}
-          theme={theme || {}}
+          theme={theme}
           panelPosition="right"
           anyPanelOpen={mapPanelVisible || inventoryPanelVisible}
         />
@@ -740,39 +659,17 @@ const RefinedGameSession = ({ navigation, route }) => {
           visible={inventoryPanelVisible}
           onClose={() => setInventoryPanelVisible(false)}
           onOpen={() => setInventoryPanelVisible(true)}
+          theme={theme}
           inventory={inventory}
-          theme={theme || {}}
           panelPosition="right"
           anyPanelOpen={mapPanelVisible || dicePanelVisible}
           onUseItem={(item) => {
-            setInventory((prev) =>
-              prev
-                .map((i) =>
-                  i.id === item.id
-                    ? { ...i, quantity: i.quantity > 1 ? i.quantity - 1 : 0 }
-                    : i,
-                )
-                .filter((i) => i.quantity > 0),
-            );
             setMessages((prev) => [
               ...prev,
               {
-                id: `${Date.now()}`,
-                text: `🧰 You used ${item.name}.`,
-                isDM: false,
-                isInventory: true,
-                item,
-              },
-            ]);
-          }}
-          onDropItem={(item) => {
-            setInventory((prev) => prev.filter((i) => i.id !== item.id));
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `${Date.now()}`,
-                text: `🧰 You dropped ${item.name}.`,
-                isDM: false,
+                id: Date.now().toString(),
+                text: `Used ${item.name}`,
+                isDM: true,
                 isInventory: true,
                 item,
               },
@@ -788,10 +685,7 @@ const RefinedGameSession = ({ navigation, route }) => {
           theme={theme}
           panelPosition="right"
           anyPanelOpen={
-            mapPanelVisible ||
-            dicePanelVisible ||
-            inventoryPanelVisible ||
-            quickActionsPanelVisible
+            mapPanelVisible || dicePanelVisible || inventoryPanelVisible
           }
           onAction={(actionText) => {
             setInputText(actionText);
@@ -809,172 +703,145 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    position: "relative",
+    backgroundColor: "transparent",
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: -2,
   },
   backgroundGradient: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: -2,
-  },
-
-  sessionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  sessionButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
   },
   chatList: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
   },
-  message: {
-    padding: 16,
-    borderRadius: 16,
-    marginVertical: 8,
+  messageContainer: {
+    marginVertical: 5,
+    padding: 10,
+    borderRadius: 8,
     maxWidth: "80%",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: "0 2px 4px rgba(0,0,0,0.25)",
+      },
+    }),
+  },
+  dmMessage: {
+    alignSelf: "flex-start",
+    marginRight: "auto",
+  },
+  playerMessage: {
+    alignSelf: "flex-end",
+    marginLeft: "auto",
+  },
+  errorMessage: {
+    backgroundColor: "#ff6b6b",
+  },
+  rollMessage: {
+    backgroundColor: "#4ecdc4",
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   inputContainer: {
+    padding: 10,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  inputRow: {
     flexDirection: "row",
-    padding: 16,
-    borderTopWidth: 2,
     alignItems: "flex-end",
   },
-  textInput: {
+  input: {
     flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    fontSize: 16,
-    minHeight: 44,
-    maxHeight: 120,
-  },
-  submitButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    minWidth: 80,
-    alignItems: "center",
-  },
-  actionButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginLeft: 8,
-    alignItems: "center",
-  },
-  actionButtonsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginHorizontal: 8,
-    marginLeft: 12,
-  },
-  actionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginHorizontal: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 70,
-  },
-  mapContent: {
-    flex: 1,
-    position: "relative",
-  },
-  mapGrid: {
-    margin: 16,
-  },
-  tokenPromptOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-  tokenPromptBox: {
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 2,
-    width: "80%",
-    maxWidth: 320,
-    alignItems: "center",
-  },
-  tokenTypeRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    marginVertical: 16,
-  },
-  tokenTypeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    minWidth: 80,
-  },
-  quickTokensRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    marginBottom: 16,
-  },
-  quickToken: {
+    borderRadius: 20,
+    paddingHorizontal: 15,
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    fontSize: 16,
+    minHeight: 40,
+    maxHeight: 100,
   },
-  buttonRow: {
+  buttonContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
+    marginLeft: 10,
   },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  sessionAlert: {
-    backgroundColor: "rgba(127, 156, 245, 0.1)",
-    borderColor: "#7f9cf5",
-    borderWidth: 2,
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    flexDirection: "row",
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "space-between",
+    marginHorizontal: 5,
   },
-  sessionAlertText: {
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
+  buttonText: {
+    fontSize: 20,
   },
-  quickSaveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginLeft: 12,
+  sendButtonContainer: {
+    alignItems: "flex-end",
+    marginTop: 10,
   },
-  quickSaveText: {
-    fontSize: 12,
-    fontWeight: "700",
+  sendButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendButtonText: {
+    fontSize: 24,
+  },
+
+  tokenPrompt: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -150 }, { translateY: -100 }],
+    width: 300,
+    padding: 20,
+    borderRadius: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: "0 2px 4px rgba(0,0,0,0.25)",
+      },
+    }),
+  },
+  tokenPromptTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  tokenPromptInput: {
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10,
+  },
+  tokenPromptButton: {
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  tokenPromptButtonText: {
+    textAlign: "center",
+    fontSize: 16,
   },
 });
 

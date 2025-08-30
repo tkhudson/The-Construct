@@ -362,26 +362,6 @@ const DiceRollerPanel = ({
           </View>
         </Animated.View>
       </PanGestureHandler>
-      {/* Dice Tab Button - only render when panel is closed */}
-      {!visible && !anyPanelOpen && (
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            {
-              right: panelPosition === "right" ? 0 : undefined,
-              left: panelPosition === "left" ? 0 : undefined,
-              backgroundColor: theme?.accent || "#7f9cf5",
-            },
-          ]}
-          onPress={handleOpen}
-          accessible={true}
-          accessibilityLabel="Open dice roller"
-          accessibilityHint="Double tap to open the dice rolling panel"
-        >
-          <Ionicons name="dice" size={24} color="#fff" />
-          <Text style={styles.tabButtonText}>Dice</Text>
-        </TouchableOpacity>
-      )}
     </>
   );
 };
@@ -477,30 +457,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     paddingVertical: 2,
     paddingHorizontal: 2,
-  },
-  tabButton: {
-    position: "absolute",
-    top: 140,
-    zIndex: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-  },
-  tabButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginLeft: 8,
-    letterSpacing: 1,
   },
 });
 

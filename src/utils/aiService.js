@@ -103,7 +103,12 @@ function analyzeRollRequest(playerAction) {
 }
 
 // Basic stub response function (fallback if no API key or error)
-function generateStubResponse(playerAction, config, character, history) {
+function generateStubResponse(
+  playerAction,
+  config,
+  character = {},
+  history = [],
+) {
   // Use the helper function to analyze roll requests
   const rollAnalysis = analyzeRollRequest(playerAction);
 
@@ -111,7 +116,11 @@ function generateStubResponse(playerAction, config, character, history) {
     return rollAnalysis.guidance;
   }
 
-  return `The DM narrates: As a ${character.race || "brave"} ${character.class || "adventurer"}, you ${playerAction}. Suddenly, a shadowy figure appears! What next?`;
+  // Ensure character data has default values
+  const characterRace = character?.race || "brave adventurer";
+  const characterClass = character?.class || "wanderer";
+
+  return `The DM narrates: As a ${characterRace} ${characterClass}, you ${playerAction}. The world responds to your actions. What would you like to do next?`;
 }
 
 // Function to retrieve stored AI settings (cross-platform: SecureStore for native, AsyncStorage for web)
@@ -138,17 +147,19 @@ async function getAISettings() {
 // Function to build a prompt with context
 function buildPrompt(
   playerAction,
-  config,
-  character,
-  history,
+  config = {},
+  character = {},
+  history = [],
   maxTokens = 300,
 ) {
   // Extract relevant 5e data
-  const raceInfo = fiveEData.races.find((r) => r.name === character.race) || {
+  const raceInfo = fiveEData.races.find(
+    (r) => r.name === (character?.race || "Human"),
+  ) || {
     traits: [],
   };
   const classInfo = fiveEData.classes.find(
-    (c) => c.name === character.class,
+    (c) => c.name === (character?.class || "Fighter"),
   ) || { features: [] };
 
   // Simple keyword extraction for skills/spells in action (expand as needed)
@@ -330,6 +341,12 @@ async function queryAI(playerAction, config, character, history) {
       // Grok (X.ai) - Example endpoint and format, may need adjustment per actual docs
       // See: https://docs.x.ai/reference
       console.log("[AI DEBUG] Attempting Grok API call...");
+
+      // Validate inputs before making API call
+      if (!playerAction) {
+        console.warn("[AI DEBUG] No player action provided");
+        return "The DM waits for your action. What would you like to do?";
+      }
       // Try grok-3 first, fallback to grok-3-mini if needed
       let grokModels = ["grok-3", "grok-3-mini"];
       let grokError = null;
