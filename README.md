@@ -8,6 +8,7 @@ The Construct is a cross-platform digital tabletop RPG that brings D&D 5e (and o
 
 **Key Features:**
 - AI-powered DM (OpenAI, Grok, Claude, or built-in fallback)
+- Multiplayer support (host as DM or join as player)
 - Theme-based adventures (Classic D&D, Modern Zombies, Star Wars, Post-Apocalyptic, Custom)
 - Streamlined character creation (theme-aware races/classes/traits)
 - Chat-driven gameplay with dice roller and skill checks
@@ -15,6 +16,7 @@ The Construct is a cross-platform digital tabletop RPG that brings D&D 5e (and o
 - Session timer and pacing (AI escalates story as time runs out)
 - Session logging and continuation (resume where you left off)
 - Modern, pastel dark mode UI
+- DM AI assistant for multiplayer games
 
 ## How to Run The Construct
 
@@ -24,6 +26,7 @@ The Construct is a cross-platform digital tabletop RPG that brings D&D 5e (and o
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
 - [Expo CLI](https://docs.expo.dev/get-started/installation/) (for mobile/web development)
 - [expo-image-picker](https://docs.expo.dev/versions/latest/sdk/imagepicker/) (for custom token uploads; now installed via npm)
+- Firebase project (for multiplayer functionality - see MULTIPLAYER_SETUP.md)
 
 ### Setup
 
@@ -71,14 +74,23 @@ This ensures compatibility with your Expo SDK version.
    - Go to Settings in the app.
    - Enter your API key for OpenAI, Grok, or Claude (or use the built-in fallback for limited play).
 
-4. **Play!**
-   - Start a new game, create your character, and begin your adventure.
-   - Use the map for tactical play, and let the AI handle the story and rules.
+4. **For multiplayer setup:**
+   - Follow the instructions in MULTIPLAYER_SETUP.md to configure Firebase
+   - Update src/firebase/config.js with your Firebase credentials
+
+5. **Play!**
+   - Start a new game (single player or multiplayer)
+   - Create your character and begin your adventure
+   - For multiplayer:
+     - DMs: Create a session and share the code with players
+     - Players: Join a session using the code from your DM
+   - Use the map for tactical play, and let the AI handle the story and rules
 
 ### Notes
 
-- **API keys are never stored in the codebase or uploaded—only saved locally on your device/browser.**
-- Multiplayer and advanced features are in development.
+- **API keys and Firebase credentials are never stored in the codebase or uploaded—only saved locally on your device/browser.**
+- The multiplayer functionality uses Firebase Realtime Database (free tier supports up to 100 simultaneous connections).
+- DM mode includes an AI assistant to help with game mechanics, lore, and storytelling.
 - For feedback or contributions, open an issue or pull request!
 
 ---

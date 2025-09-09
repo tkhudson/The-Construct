@@ -10,8 +10,10 @@ import {
   ActivityIndicator,
   ImageBackground,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
+import { createSession } from "../firebase/sessionService";
 
 // Sample options based on game plan
 const themesList = [
@@ -23,6 +25,7 @@ const themesList = [
 ];
 const difficulties = ["Easy", "Medium", "Hard"];
 const campaignModes = ["One-shot", "Ongoing"];
+const roleModes = ["Player", "Dungeon Master"];
 
 const SessionSetup = ({ navigation }) => {
   const [numPlayers, setNumPlayers] = useState(1);
@@ -34,6 +37,12 @@ const SessionSetup = ({ navigation }) => {
     campaignModes[0],
   );
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Multiplayer options
+  const [isMultiplayer, setIsMultiplayer] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(roleModes[0]);
+  const [dmName, setDmName] = useState("");
 
   // Theme context
   const { theme, setThemeKey } = useTheme();
@@ -46,19 +55,79 @@ const SessionSetup = ({ navigation }) => {
     // eslint-disable-next-line
   }, [selectedTheme]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setLoading(true);
-    setTimeout(() => {
-      const config = {
-        numPlayers,
-        isAIDM,
-        theme: selectedTheme === "Custom" ? customTheme : selectedTheme,
-        difficulty: selectedDifficulty,
-        campaignMode: selectedCampaignMode,
-      };
-      navigation.navigate("CharacterCreation", { config });
+    setError(null);
+
+    try {
+      const themeToUse =
+        selectedTheme === "Custom" ? customTheme : selectedTheme;
+
+      // Single player mode
+      if (!isMultiplayer) {
+        const config = {
+          numPlayers,
+          isAIDM,
+          theme: themeToUse,
+          difficulty: selectedDifficulty,
+          campaignMode: selectedCampaignMode,
+        };
+        navigation.navigate("CharacterCreation", { config });
+      }
+      // Multiplayer mode
+      else {
+        // Player role - go to join session screen
+        if (selectedRole === "Player") {
+          navigation.navigate("JoinSession");
+        }
+        // DM role - create a new session
+        else {
+          if (!dmName.trim()) {
+            setError("Please enter your name as DM");
+            setLoading(false);
+            return;
+          }
+
+          // Create a new session
+          const sessionResult = await createSession(dmName, themeToUse, {
+            difficulty: selectedDifficulty,
+            campaignMode: selectedCampaignMode,
+            isAIDM: isAIDM,
+          });
+
+          if (sessionResult.success) {
+            // Navigate to character creation (DM doesn't need a character, but uses the same flow)
+            navigation.navigate("CharacterCreation", {
+              config: {
+                theme: themeToUse,
+                difficulty: selectedDifficulty,
+                campaignMode: selectedCampaignMode,
+                isAIDM: isAIDM,
+              },
+              isMultiplayer: true,
+              isDM: true,
+              sessionCode: sessionResult.sessionCode,
+              dmId: sessionResult.dmId,
+              dmName: dmName,
+            });
+
+            // Show session code in an alert
+            Alert.alert(
+              "Session Created!",
+              `Your session code is: ${sessionResult.sessionCode}\n\nShare this code with your players so they can join your game.`,
+              [{ text: "OK" }],
+            );
+          } else {
+            setError(sessionResult.error || "Failed to create session");
+          }
+        }
+      }
+    } catch (err) {
+      setError(`Error setting up session: ${err.message}`);
+      console.error("Session setup error:", err);
+    } finally {
       setLoading(false);
-    }, 1200); // Simulate loading for 1.2 seconds
+    }
   };
 
   // Background: image or gradient
@@ -88,38 +157,114 @@ const SessionSetup = ({ navigation }) => {
       {backgroundElement}
       <Text style={[styles.title, { color: theme.text }]}>Session Setup</Text>
 
-      <Text style={[styles.label, { color: theme.text }]}>
-        Number of Players (1-6):
-      </Text>
-      <Picker
-        selectedValue={numPlayers}
-        onValueChange={(itemValue) => setNumPlayers(itemValue)}
-        style={[
-          styles.picker,
-          {
-            color: theme.text,
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-          },
-        ]}
-        dropdownIconColor={theme.accent}
-      >
-        {[1, 2, 3, 4, 5, 6].map((num) => (
-          <Picker.Item key={num} label={`${num}`} value={num} />
-        ))}
-      </Picker>
-
+      {/* Multiplayer switch */}
       <View style={styles.switchContainer}>
         <Text style={[styles.label, { color: theme.text }]}>
-          DM Mode: {isAIDM ? "AI" : "Player"}
+          Multiplayer Mode: {isMultiplayer ? "On" : "Off"}
         </Text>
         <Switch
-          value={isAIDM}
-          onValueChange={setIsAIDM}
+          value={isMultiplayer}
+          onValueChange={setIsMultiplayer}
           trackColor={{ true: theme.accent, false: "#888" }}
-          thumbColor={isAIDM ? theme.accent : "#ccc"}
+          thumbColor={isMultiplayer ? theme.accent : "#ccc"}
         />
       </View>
+
+      {isMultiplayer ? (
+        <>
+          {/* Role Selection (Player or DM) */}
+          <Text style={[styles.label, { color: theme.text }]}>Your Role:</Text>
+          <Picker
+            selectedValue={selectedRole}
+            onValueChange={(itemValue) => setSelectedRole(itemValue)}
+            style={[
+              styles.picker,
+              {
+                color: theme.text,
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+            dropdownIconColor={theme.accent}
+          >
+            {roleModes.map((role) => (
+              <Picker.Item key={role} label={role} value={role} />
+            ))}
+          </Picker>
+
+          {/* DM Name input (only shown when DM role is selected) */}
+          {selectedRole === "Dungeon Master" && (
+            <>
+              <Text style={[styles.label, { color: theme.text }]}>
+                Your Name (as DM):
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    color: theme.text,
+                    borderColor: theme.border,
+                    backgroundColor: "#23294699",
+                  },
+                ]}
+                placeholder="Enter your name"
+                placeholderTextColor={theme.text + "99"}
+                value={dmName}
+                onChangeText={setDmName}
+              />
+
+              {/* AI DM Assistant toggle */}
+              <View style={styles.switchContainer}>
+                <Text style={[styles.label, { color: theme.text }]}>
+                  AI DM Assistant: {isAIDM ? "On" : "Off"}
+                </Text>
+                <Switch
+                  value={isAIDM}
+                  onValueChange={setIsAIDM}
+                  trackColor={{ true: theme.accent, false: "#888" }}
+                  thumbColor={isAIDM ? theme.accent : "#ccc"}
+                />
+              </View>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Single player options */}
+          <Text style={[styles.label, { color: theme.text }]}>
+            Number of Players (1-6):
+          </Text>
+          <Picker
+            selectedValue={numPlayers}
+            onValueChange={(itemValue) => setNumPlayers(itemValue)}
+            style={[
+              styles.picker,
+              {
+                color: theme.text,
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+            dropdownIconColor={theme.accent}
+          >
+            {[1, 2, 3, 4, 5, 6].map((num) => (
+              <Picker.Item key={num} label={`${num}`} value={num} />
+            ))}
+          </Picker>
+
+          <View style={styles.switchContainer}>
+            <Text style={[styles.label, { color: theme.text }]}>
+              DM Mode: {isAIDM ? "AI" : "Player"}
+            </Text>
+            <Switch
+              value={isAIDM}
+              onValueChange={setIsAIDM}
+              trackColor={{ true: theme.accent, false: "#888" }}
+              thumbColor={isAIDM ? theme.accent : "#ccc"}
+            />
+          </View>
+        </>
+      )}
 
       <Text style={[styles.label, { color: theme.text }]}>Theme/Setting:</Text>
       <Picker
@@ -194,11 +339,18 @@ const SessionSetup = ({ navigation }) => {
         ))}
       </Picker>
 
+      {/* Error message display */}
+      {error && (
+        <Text style={[styles.errorText, { marginTop: 15 }]}>{error}</Text>
+      )}
+
       {loading ? (
         <View style={{ marginVertical: 30, alignItems: "center" }}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={{ marginTop: 10, fontSize: 16, color: theme.text }}>
-            Starting session...
+            {isMultiplayer && selectedRole === "Dungeon Master"
+              ? "Creating session..."
+              : "Starting session..."}
           </Text>
         </View>
       ) : (
@@ -210,7 +362,11 @@ const SessionSetup = ({ navigation }) => {
           onPress={handleSubmit}
         >
           <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-            Start Session
+            {isMultiplayer
+              ? selectedRole === "Player"
+                ? "Join Session"
+                : "Create Session"
+              : "Start Session"}
           </Text>
         </TouchableOpacity>
       )}
@@ -271,13 +427,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 18,
-    minWidth: 120,
+    minWidth: 150,
     elevation: 1,
   },
   buttonText: {
     fontSize: 18,
     fontWeight: "bold",
     letterSpacing: 0.5,
+  },
+  errorText: {
+    color: "#e74c3c",
+    textAlign: "center",
+    fontSize: 16,
+    marginBottom: 10,
   },
 });
 

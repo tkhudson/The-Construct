@@ -4,7 +4,9 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainMenu from "./screens/MainMenu";
 import CharacterCreation from "./screens/CharacterCreation";
 import RefinedGameSession from "./screens/RefinedGameSession";
+import MultiplayerGameSession from "./screens/MultiplayerGameSession";
 import SessionSetup from "./screens/SessionSetup";
+import JoinSession from "./screens/JoinSession";
 import Settings from "./screens/Settings";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -32,6 +34,7 @@ export default function App() {
               options={{ title: "The Construct" }}
             />
             <Stack.Screen name="NewGame" component={SessionSetup} />
+            <Stack.Screen name="JoinSession" component={JoinSession} />
             <Stack.Screen
               name="CharacterCreation"
               component={CharacterCreation}
@@ -42,6 +45,10 @@ export default function App() {
             />
             <Stack.Screen name="Settings" component={Settings} />
             <Stack.Screen name="GameSession" component={RefinedGameSession} />
+            <Stack.Screen
+              name="MultiplayerGameSession"
+              component={MultiplayerGameSession}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </ErrorBoundary>

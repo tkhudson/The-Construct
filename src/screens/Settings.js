@@ -143,6 +143,10 @@ const Settings = ({ navigation }) => {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Settings</Text>
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>AI Settings</Text>
+      </View>
+
       <Text style={styles.label}>AI Provider:</Text>
       <Picker
         selectedValue={selectedProvider}
@@ -250,6 +254,36 @@ const Settings = ({ navigation }) => {
         repository. You can clear or change your key at any time in this
         settings page.
       </Text>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          Firebase Settings (for Multiplayer)
+        </Text>
+      </View>
+
+      <Text style={styles.infoBox}>
+        To use multiplayer features, you need to set up a Firebase project and
+        configure it in the app. See MULTIPLAYER_SETUP.md for detailed
+        instructions.
+      </Text>
+
+      <Text style={styles.label}>Firebase Configuration:</Text>
+      <TextInput
+        style={[styles.textInput, { height: 150 }]}
+        multiline
+        placeholder="Paste your Firebase config object here (from Firebase console)"
+        value={apiKey.includes("firebase") ? "Config saved ✓" : ""}
+        onChangeText={(text) => {
+          if (text.includes("apiKey") && text.includes("firebase")) {
+            setApiKey(text); // Reusing apiKey state for simplicity
+          }
+        }}
+      />
+      <Text style={styles.info}>
+        Your Firebase configuration contains API keys that should be kept
+        private. Like the AI API keys, they are only stored locally on your
+        device.
+      </Text>
       {Platform.OS === "web" && (
         <Text style={styles.warning}>
           Warning: On web, storage is not fully secure (uses localStorage). For
@@ -274,10 +308,30 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: "center",
   },
+  section: {
+    marginTop: 20,
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#444",
+  },
   label: {
     fontSize: 18,
     marginTop: 10,
     marginBottom: 5,
+  },
+  infoBox: {
+    backgroundColor: "#e8f4f8",
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: "#4a90e2",
   },
   picker: {
     height: 50,

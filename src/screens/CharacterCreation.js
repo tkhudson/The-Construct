@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,9 @@ const CharacterCreation = ({ navigation, route }) => {
     ageRange: { min: 10, max: 100 },
     traitModifiers: () => ({}),
   };
+
+  // Check if DM mode (DMs don't need a character)
+  const isDM = route.params?.isDM || false;
 
   // State for dynamic selections
   const [selectedRace, setSelectedRace] = useState(characterOptions.races[0]);
@@ -82,15 +85,58 @@ const CharacterCreation = ({ navigation, route }) => {
       age,
       traitMods,
     };
-    navigation.navigate("GameSession", { config, character });
+
+    // Check if this is a multiplayer session
+    const isMultiplayer = route.params?.isMultiplayer || false;
+    const isDM = route.params?.isDM || false;
+    const sessionCode = route.params?.sessionCode;
+    const dmId = route.params?.dmId;
+    const dmName = route.params?.dmName;
+    const playerId = route.params?.playerId;
+    const playerName = route.params?.playerName;
+
+    if (isMultiplayer) {
+      if (isDM && !sessionCode) {
+        // This shouldn't happen, but just in case
+        alert("Error: Missing session code for DM");
+        return;
+      }
+
+      // Navigate to multiplayer game session
+      navigation.navigate("MultiplayerGameSession", {
+        sessionCode,
+        dmId,
+        dmName,
+        playerId,
+        playerName,
+        character,
+        isMultiplayer: true,
+        isDM,
+        config,
+      });
+    } else {
+      // Navigate to regular game session
+      navigation.navigate("GameSession", { config, character });
+    }
   };
 
   return (
     <ScrollView style={[styles.container, gradientStyle]}>
       {backgroundElement}
       <Text style={[styles.title, { color: theme.text }]}>
-        Character Creation
+        {isDM ? "Session Setup" : "Character Creation"}
       </Text>
+
+      {isDM && (
+        <View style={styles.dmInfoContainer}>
+          <Text style={[styles.dmInfoText, { color: theme.accent }]}>
+            Session Code: {route.params?.sessionCode}
+          </Text>
+          <Text style={[styles.dmInfoSubtext, { color: theme.text }]}>
+            Share this code with your players
+          </Text>
+        </View>
+      )}
 
       <Text style={[styles.label, { color: theme.text }]}>Race:</Text>
       <Picker
@@ -201,7 +247,7 @@ const CharacterCreation = ({ navigation, route }) => {
         onPress={handleSubmit}
       >
         <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-          Submit Character
+          {route.params?.isDM ? "Start Session" : "Submit Character"}
         </Text>
       </TouchableOpacity>
     </ScrollView>
@@ -263,6 +309,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     letterSpacing: 0.5,
+  },
+  dmInfoContainer: {
+    backgroundColor: "#23294699",
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: "#4C63B6",
+  },
+  dmInfoText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    letterSpacing: 2,
+  },
+  dmInfoSubtext: {
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 8,
   },
 });
 
