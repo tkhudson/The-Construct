@@ -60,6 +60,14 @@ const MainMenu = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
+        style={[styles.button, { backgroundColor: theme.button }]}
+        onPress={() => navigation.navigate("JoinSession")}
+      >
+        <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+          Join Game
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
         style={[
           styles.button,
           { backgroundColor: canContinue ? theme.button : "#888" },
